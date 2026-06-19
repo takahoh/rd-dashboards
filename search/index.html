@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>検索ワード別 Conversion 推移</title>
+  <script>
+    if (sessionStorage.getItem('nb_dashboard_auth') !== '1') { window.location.href = '../'; }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+    header { background: #cc0000; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header span { font-size: 13px; opacity: 0.85; }
+    .controls { background: white; padding: 16px 24px; border-bottom: 1px solid #ddd; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+    .control-group { display: flex; flex-direction: column; gap: 4px; }
+    label { font-size: 12px; color: #666; font-weight: 500; }
+    select, input[type=number] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background: white; }
+    select { min-width: 160px; }
+    input[type=number] { width: 80px; }
+    button { padding: 7px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; }
+    .btn-primary { background: #cc0000; color: white; }
+    .btn-primary:hover { background: #aa0000; }
+    .btn-secondary { background: #eee; color: #333; }
+    .btn-secondary:hover { background: #ddd; }
+    .file-upload-area { display: flex; flex-direction: column; gap: 4px; }
+    .file-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .file-badge { background: #f0f0f0; border: 1px solid #ccc; border-radius: 12px; padding: 2px 10px; font-size: 11px; color: #555; display: flex; align-items: center; gap: 4px; }
+    .file-badge.loaded { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; cursor: pointer; user-select: none; }
+    .file-badge.loaded:hover { background: #d4edda; }
+    .file-badge.loaded.off { background: #f0f0f0; border-color: #ccc; color: #aaa; text-decoration: line-through; }
+    .file-badge.loaded.off:hover { background: #e8e8e8; }
+    .main { padding: 20px 24px; }
+    .chart-card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+    .chart-card h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .chart-card .subtitle { font-size: 12px; color: #888; margin-bottom: 16px; }
+    .chart-wrap { position: relative; height: 360px; }
+    .query-table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #fafafa; border-bottom: 2px solid #eee; padding: 8px 12px; text-align: left; font-weight: 600; white-space: nowrap; cursor: pointer; user-select: none; }
+    th:hover { background: #f0f0f0; }
+    td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; }
+    tr:hover td { background: #fafafa; }
+    .anomaly { color: #cc0000; font-weight: 600; }
+    .loading { text-align: center; padding: 40px; color: #888; font-size: 14px; }
+    .error { color: #cc0000; background: #fff0f0; padding: 12px 16px; border-radius: 4px; font-size: 13px; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: white; border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+    .stat-value { font-size: 22px; font-weight: 700; color: #cc0000; }
+    .stat-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+    .legend-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; padding: 2px 6px; border-radius: 3px; }
+    .legend-item:hover { background: #f5f5f5; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legend-item.dimmed { opacity: 0.3; }
+    .search-box { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 200px; }
+    .hint { font-size: 11px; color: #aaa; margin-top: 4px; }
+    .tab-bar { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #eee; }
+    .tab { padding: 8px 16px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #666; }
+    .tab.active { border-bottom-color: #cc0000; color: #cc0000; font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .anomaly-badge { display: inline-block; background: #fff3f3; border: 1px solid #ffaaaa; color: #cc0000; border-radius: 10px; font-size: 10px; padding: 1px 6px; margin-left: 4px; }
+    .raw-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+    .raw-controls .control-group { min-width: 120px; }
+    #rawTableWrap table { font-size: 12px; }
+    #rawTableWrap th { font-size: 11px; padding: 6px 10px; }
+    #rawTableWrap td { padding: 5px 10px; }
+    th.sort-asc::after { content: ' ▲'; font-size: 10px; }
+    th.sort-desc::after { content: ' ▼'; font-size: 10px; }
+    .insight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .insight-grid { grid-template-columns: 1fr; } }
+    .insight-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 20px; }
+    .quadrant-wrap { position: relative; height: 480px; }
+    .funnel-wrap { display: flex; flex-direction: column; gap: 0; }
+    .funnel-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .funnel-label { width: 110px; font-size: 12px; color: #555; text-align: right; flex-shrink: 0; }
+    .funnel-bar-wrap { flex: 1; position: relative; height: 32px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+    .funnel-bar { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; font-weight: 600; color: white; transition: width 0.4s; white-space: nowrap; }
+    .funnel-arrow { font-size: 18px; color: #bbb; text-align: center; margin: -2px 0 -2px 120px; }
+    .funnel-rate { font-size: 11px; color: #888; width: 70px; text-align: left; flex-shrink: 0; }
+    .quadrant-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .quadrant-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+    .quadrant-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .selected-query-card { background: #fff8f8; border: 1px solid #f5c6c6; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; }
+    .selected-query-card strong { color: #cc0000; font-size: 15px; }
+    .funnel-section-title { font-size: 12px; color: #999; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; margin-top: 4px; }
+    .trend-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 20px; }
+    .trend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 900px) { .trend-grid { grid-template-columns: 1fr; } }
+    .trend-section-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .trend-up-label { color: #20bf6b; }
+    .trend-down-label { color: #cc0000; }
+    .trend-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; cursor: pointer; border-radius: 4px; padding: 2px 4px; }
+    .trend-bar-row:hover { background: #f5f5f5; }
+    .trend-rank { width: 22px; font-size: 11px; color: #aaa; text-align: right; flex-shrink: 0; }
+    .trend-query { width: 130px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+    .trend-bar-wrap { flex: 1; height: 20px; background: #f0f0f0; border-radius: 3px; overflow: hidden; position: relative; }
+    .trend-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+    .trend-val { width: 80px; font-size: 11px; color: #555; flex-shrink: 0; text-align: right; }
+    .trend-spark { width: 80px; height: 28px; flex-shrink: 0; }
+    .trend-detail-card { background: #f9f9f9; border-radius: 6px; padding: 14px 16px; margin-top: 20px; }
+    .trend-detail-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+    .trend-detail-wrap { position: relative; height: 200px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>検索ワード別 Conversion 推移ダッシュボード</h1>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="file-upload-area">
+    <label>CSVファイルを読み込む（複数選択可）</label>
+    <input type="file" id="fileInput" multiple accept=".csv" style="font-size:13px;">
+    <div class="file-list" id="fileList"></div>
+    <div class="hint">ファイル名から期間を自動取得。読み込み後はバッジをクリックして表示期間を切り替えられます</div>
+  </div>
+
+  <div class="control-group">
+    <label>指標</label>
+    <select id="metricSelect">
+      <option value="order_conversion">CV率 (order_conversion)</option>
+      <option value="searches">検索数 (searches)</option>
+      <option value="orders">注文数 (orders)</option>
+      <option value="search_visits">訪問数 (search_visits)</option>
+      <option value="usd_revenue_per_search">検索あたり売上USD</option>
+      <option value="std_revenue_per_search">検索あたり売上JPY</option>
+    </select>
+  </div>
+
+  <div class="control-group">
+    <label>フィルタ方法</label>
+    <select id="filterMode">
+      <option value="top_searches">検索数 上位</option>
+      <option value="top_conversion">CV率 上位</option>
+      <option value="min_searches">最小検索数</option>
+    </select>
+  </div>
+
+  <div class="control-group">
+    <label id="filterValueLabel">件数</label>
+    <input type="number" id="filterValue" value="20" min="1" max="100">
+  </div>
+
+  <div class="control-group">
+    <label>クエリ検索</label>
+    <input type="text" class="search-box" id="querySearch" placeholder="ワードで絞り込み...">
+  </div>
+
+  <button class="btn-primary" onclick="renderAll()">グラフ更新</button>
+  <button class="btn-secondary" onclick="resetZoom()">ズームリセット</button>
+</div>
+
+<div class="main">
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card"><div class="stat-label">読み込み済み期間</div><div class="stat-value" id="statPeriods">-</div><div class="stat-sub">月次ファイル</div></div>
+    <div class="stat-card"><div class="stat-label">ユニーク検索ワード（全期間）</div><div class="stat-value" id="statQueries">-</div></div>
+    <div class="stat-card"><div class="stat-label">表示中ワード数</div><div class="stat-value" id="statShown">-</div></div>
+    <div class="stat-card"><div class="stat-label">異常検知候補</div><div class="stat-value" id="statAnomalies">-</div><div class="stat-sub">前月比 ±30%以上</div></div>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab('chart')">推移グラフ</div>
+    <div class="tab" onclick="switchTab('anomaly')">異常検知 <span class="anomaly-badge" id="anomalyCount">-</span></div>
+    <div class="tab" onclick="switchTab('table')">集計テーブル</div>
+    <div class="tab" onclick="switchTab('raw')">RAWデータ</div>
+    <div class="tab" onclick="switchTab('insight')">インサイト</div>
+    <div class="tab" onclick="switchTab('trend')">成長/衰退</div>
+  </div>
+
+  <div class="tab-content active" id="tab-chart">
+    <div class="chart-card">
+      <h2 id="chartTitle">指標の月次推移</h2>
+      <div class="subtitle" id="chartSubtitle">CSVファイルを読み込むとグラフが表示されます</div>
+      <div class="legend-wrap" id="customLegend"></div>
+      <div class="chart-wrap">
+        <canvas id="mainChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-anomaly">
+    <div class="chart-card">
+      <h2>異常検知レポート</h2>
+      <div class="subtitle">前月比で ±30% 以上変動したワードを表示（表示中ワードのみ対象）</div>
+      <div id="anomalyTable"><div class="loading">データを読み込んでください</div></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-table">
+    <div class="chart-card">
+      <h2>集計テーブル</h2>
+      <div class="subtitle">表示中ワードの全期間サマリー</div>
+      <div class="query-table-wrap">
+        <table id="summaryTable">
+          <thead><tr><th>クエリ</th><th>期間数</th><th>総検索数</th><th>平均CV率</th><th>最大CV率</th><th>最小CV率</th><th>CV率変動(最大-最小)</th></tr></thead>
+          <tbody id="summaryTableBody"><tr><td colspan="7" class="loading">データを読み込んでください</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-trend">
+    <div class="chart-card">
+      <div class="trend-controls">
+        <div class="control-group">
+          <label>分析指標</label>
+          <select id="trendMetric" onchange="renderTrend()">
+            <option value="order_conversion">CV率</option>
+            <option value="searches">検索数</option>
+            <option value="orders">注文数</option>
+            <option value="std_revenue">売上JPY</option>
+            <option value="std_revenue_per_search">検索あたり売上JPY</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>最小検索数（全期間合計）</label>
+          <input type="number" id="trendMinSearches" value="5000" min="0" style="width:100px;" oninput="renderTrend()">
+        </div>
+        <div class="control-group">
+          <label>表示件数（上位/下位）</label>
+          <input type="number" id="trendTopN" value="20" min="5" max="50" style="width:80px;" oninput="renderTrend()">
+        </div>
+      </div>
+
+      <div id="trendContent"><div class="loading">データを読み込んでください</div></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-insight">
+    <div class="chart-card">
+      <div class="insight-controls">
+        <div class="control-group">
+          <label>対象期間</label>
+          <select id="insightPeriodSelect" onchange="renderInsight()">
+            <option value="">— 選択してください —</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>最小検索数（絞り込み）</label>
+          <input type="number" id="insightMinSearches" value="1000" min="0" style="width:100px;" oninput="renderInsight()">
+        </div>
+        <div class="control-group">
+          <label>バブルサイズ</label>
+          <select id="insightBubbleSize" onchange="renderInsight()">
+            <option value="searches">検索数</option>
+            <option value="std_revenue">売上JPY</option>
+            <option value="orders">注文数</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="insight-grid">
+        <!-- 左: 4象限 -->
+        <div>
+          <h2>4象限マトリクス</h2>
+          <div class="subtitle">X軸: クリック率（search_visits/searches）　Y軸: ランディングCV率（orders/search_visits）　バブル: 選択指標</div>
+          <div class="quadrant-wrap">
+            <canvas id="quadrantChart"></canvas>
+          </div>
+          <div class="quadrant-legend" id="quadrantLegend">
+            <div class="quadrant-legend-item"><div class="quadrant-legend-dot" style="background:#cc0000"></div>要改善（高検索・低CV）</div>
+            <div class="quadrant-legend-item"><div class="quadrant-legend-dot" style="background:#20bf6b"></div>優良（高検索・高CV）</div>
+            <div class="quadrant-legend-item"><div class="quadrant-legend-dot" style="background:#f7b731"></div>隠れ優良（低検索・高CV）</div>
+            <div class="quadrant-legend-item"><div class="quadrant-legend-dot" style="background:#aaa"></div>低優先（低検索・低CV）</div>
+          </div>
+          <div style="font-size:11px;color:#aaa;margin-top:6px;">バブルをクリックするとファネル詳細を表示</div>
+        </div>
+
+        <!-- 右: ファネル -->
+        <div>
+          <h2>ファネル分解</h2>
+          <div class="subtitle" id="funnelSubtitle">左のバブルをクリックしてワードを選択</div>
+          <div id="funnelContent"><div class="loading" style="padding:60px 0;">バブルをクリックしてください</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-raw">
+    <div class="chart-card">
+      <h2>RAWデータ</h2>
+      <div class="subtitle">読み込んだCSVの全データを閲覧できます（フィルタはグラフと独立）</div>
+      <div class="raw-controls">
+        <div class="control-group">
+          <label>期間</label>
+          <select id="rawPeriodSelect" onchange="renderRawTable()">
+            <option value="">— 選択してください —</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>クエリ絞り込み</label>
+          <input type="text" class="search-box" id="rawQuerySearch" placeholder="ワードで絞り込み..." oninput="renderRawTable()">
+        </div>
+        <div class="control-group">
+          <label>並び替え</label>
+          <select id="rawSortCol" onchange="renderRawTable()">
+            <option value="searches">検索数</option>
+            <option value="order_conversion">CV率</option>
+            <option value="orders">注文数</option>
+            <option value="search_visits">訪問数</option>
+            <option value="usd_revenue">売上USD</option>
+            <option value="std_revenue">売上JPY</option>
+            <option value="query">クエリ名</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>表示件数</label>
+          <select id="rawPageSize" onchange="rawPage=0;renderRawTable()">
+            <option value="100">100件</option>
+            <option value="250">250件</option>
+            <option value="500">500件</option>
+            <option value="0">全件</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:6px;">
+          <button class="btn-secondary" id="rawPrevBtn" onclick="rawPage=Math.max(0,rawPage-1);renderRawTable()">← 前</button>
+          <span id="rawPageInfo" style="font-size:13px;color:#666;align-self:center;white-space:nowrap;"></span>
+          <button class="btn-secondary" id="rawNextBtn" onclick="rawPage++;renderRawTable()">次 →</button>
+        </div>
+      </div>
+      <div class="query-table-wrap" style="margin-top:14px;">
+        <div id="rawTableWrap"><div class="loading">期間を選択してください</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────
+let allData = {};        // { "YYYY-MM": { query: {searches, order_conversion, ...} } }
+let sortedPeriods = [];  // 読み込んだ全期間（ソート済み）
+let activePeriods = [];  // グラフ等に使う有効期間（バッジON/OFFで制御）
+let chartInstance = null;
+let visibleQueries = new Set();
+let activeQueries = [];
+
+const COLORS = [
+  '#cc0000','#e65c00','#f7b731','#20bf6b','#2980b9','#8e44ad',
+  '#16a085','#d35400','#c0392b','#27ae60','#2471a3','#7d3c98',
+  '#117864','#784212','#1a5276','#4a235a','#145a32','#922b21',
+  '#1a252f','#4d5656'
+];
+
+// ──────────────────────────────────────────────
+// File loading
+// ──────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  const fileList = document.getElementById('fileList');
+  fileList.innerHTML = '';
+
+  // ローディングバッジを先に表示
+  for (const file of files) {
+    const badge = document.createElement('div');
+    badge.className = 'file-badge';
+    badge.id = 'badge_' + file.name;
+    badge.textContent = file.name;
+    fileList.appendChild(badge);
+  }
+
+  for (const file of files) {
+    try {
+      const period = extractPeriod(file.name);
+      const text = await file.text();
+      const rows = parseCSV(text);
+      allData[period] = rows;
+      const badge = document.getElementById('badge_' + file.name);
+      if (badge) {
+        badge.className = 'file-badge loaded';
+        badge.textContent = `✓ ${period}`;
+        badge.dataset.period = period;
+        badge.title = 'クリックで表示/非表示を切り替え';
+        badge.addEventListener('click', () => togglePeriodBadge(badge));
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  }
+
+  sortedPeriods = Object.keys(allData).sort();
+  activePeriods = [...sortedPeriods]; // 全期間をデフォルトでON
+  updateRawPeriodSelect();
+  updateInsightPeriodSelect();
+  updateStats();
+  renderAll();
+});
+
+function togglePeriodBadge(badge) {
+  const period = badge.dataset.period;
+  if (badge.classList.contains('off')) {
+    badge.classList.remove('off');
+    if (!activePeriods.includes(period)) activePeriods.push(period);
+  } else {
+    // 最低1つは残す
+    if (activePeriods.length <= 1) return;
+    badge.classList.add('off');
+    activePeriods = activePeriods.filter(p => p !== period);
+  }
+  activePeriods.sort();
+  updateStats();
+  renderAll();
+}
+
+function extractPeriod(filename) {
+  // e.g. 2026-01-01_2026-01-31 → "2026-01"
+  const m = filename.match(/(\d{4}-\d{2})-\d{2}_\d{4}-\d{2}-\d{2}/);
+  if (m) return m[1];
+  const m2 = filename.match(/(\d{4}-\d{2})/);
+  if (m2) return m2[1];
+  return filename.replace(/\.[^.]+$/, '');
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const header = parseCSVLine(lines[0]);
+  const result = {};
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCSVLine(lines[i]);
+    if (vals.length < header.length) continue;
+    const row = {};
+    header.forEach((h, j) => { row[h] = isNaN(vals[j]) ? vals[j] : parseFloat(vals[j]); });
+    const q = String(row.query).replace(/^"|"$/g, '');
+    // 同一キーが複数行ある場合（表記ゆれ: 全角スペース・末尾ピリオド等）は searches 最大行を採用
+    if (!result[q] || (row.searches || 0) > (result[q].searches || 0)) {
+      result[q] = row;
+    }
+  }
+  return result;
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let cur = '', inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQuote = !inQuote; }
+    else if (c === ',' && !inQuote) { result.push(cur.trim()); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+// ──────────────────────────────────────────────
+// Filter & select queries
+// ──────────────────────────────────────────────
+function getTopQueries() {
+  const mode = document.getElementById('filterMode').value;
+  const n = parseInt(document.getElementById('filterValue').value) || 20;
+  const searchFilter = document.getElementById('querySearch').value.trim().toLowerCase();
+
+  // Aggregate across active periods only
+  const agg = {};
+  for (const period of activePeriods) {
+    for (const [q, row] of Object.entries(allData[period])) {
+      if (!agg[q]) agg[q] = { totalSearches: 0, totalOrders: 0, count: 0 };
+      agg[q].totalSearches += row.searches || 0;
+      agg[q].totalOrders += row.orders || 0;
+      agg[q].count++;
+    }
+  }
+
+  let queries = Object.entries(agg);
+
+  if (searchFilter) {
+    queries = queries.filter(([q]) => q.toLowerCase().includes(searchFilter));
+  }
+
+  if (mode === 'top_searches') {
+    queries.sort((a, b) => b[1].totalSearches - a[1].totalSearches);
+    return queries.slice(0, n).map(([q]) => q);
+  } else if (mode === 'top_conversion') {
+    queries.sort((a, b) => (b[1].totalOrders / Math.max(b[1].totalSearches,1)) - (a[1].totalOrders / Math.max(a[1].totalSearches,1)));
+    return queries.slice(0, n).map(([q]) => q);
+  } else if (mode === 'min_searches') {
+    return queries.filter(([, v]) => v.totalSearches >= n).map(([q]) => q).slice(0, 100);
+  }
+  return queries.slice(0, n).map(([q]) => q);
+}
+
+// ──────────────────────────────────────────────
+// Main render
+// ──────────────────────────────────────────────
+function renderAll() {
+  if (sortedPeriods.length === 0) return;
+
+  activeQueries = getTopQueries();
+  visibleQueries = new Set(activeQueries);
+
+  const metric = document.getElementById('metricSelect').value;
+  renderChart(metric);
+  renderAnomalyTable(metric);
+  renderSummaryTable();
+  updateStats();
+}
+
+function renderChart(metric) {
+  const metricLabels = {
+    order_conversion: 'CV率',
+    searches: '検索数',
+    orders: '注文数',
+    search_visits: '訪問数',
+    usd_revenue_per_search: '検索あたり売上USD',
+    std_revenue_per_search: '検索あたり売上JPY'
+  };
+
+  const datasets = activeQueries.map((q, i) => {
+    const data = activePeriods.map(p => {
+      const row = allData[p]?.[q];
+      return row ? (row[metric] ?? null) : null;
+    });
+    return {
+      label: q,
+      data,
+      borderColor: COLORS[i % COLORS.length],
+      backgroundColor: COLORS[i % COLORS.length] + '22',
+      tension: 0.3,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      fill: false,
+      hidden: !visibleQueries.has(q),
+    };
+  });
+
+  document.getElementById('chartTitle').textContent = `${metricLabels[metric] || metric} の月次推移`;
+  document.getElementById('chartSubtitle').textContent = `表示ワード数: ${activeQueries.length} / 期間: ${activePeriods.join(', ')}`;
+
+  if (chartInstance) chartInstance.destroy();
+
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels: activePeriods, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const val = ctx.parsed.y;
+              if (metric === 'order_conversion') return ` ${ctx.dataset.label}: ${(val * 100).toFixed(2)}%`;
+              return ` ${ctx.dataset.label}: ${val?.toLocaleString() ?? '-'}`;
+            }
+          }
+        },
+        zoom: {
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+          pan: { enabled: true, mode: 'x' }
+        }
+      },
+      scales: {
+        y: {
+          ticks: {
+            callback: (v) => metric === 'order_conversion' ? (v * 100).toFixed(1) + '%' : v.toLocaleString()
+          }
+        }
+      }
+    }
+  });
+
+  buildCustomLegend();
+}
+
+function buildCustomLegend() {
+  const wrap = document.getElementById('customLegend');
+  wrap.innerHTML = '';
+
+  // 一括ボタン
+  const allOn  = document.createElement('button');
+  allOn.className  = 'btn-secondary';
+  allOn.style.cssText = 'font-size:11px;padding:3px 10px;margin-right:4px;';
+  allOn.textContent = 'すべて表示';
+  allOn.addEventListener('click', () => setAllQueryVisibility(true));
+
+  const allOff = document.createElement('button');
+  allOff.className = 'btn-secondary';
+  allOff.style.cssText = 'font-size:11px;padding:3px 10px;margin-right:12px;';
+  allOff.textContent = 'すべて非表示';
+  allOff.addEventListener('click', () => setAllQueryVisibility(false));
+
+  wrap.appendChild(allOn);
+  wrap.appendChild(allOff);
+
+  activeQueries.forEach((q, i) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item' + (visibleQueries.has(q) ? '' : ' dimmed');
+    item.dataset.query = q;
+    item.innerHTML = `<div class="legend-dot" style="background:${COLORS[i % COLORS.length]}"></div><span>${q}</span>`;
+    item.addEventListener('click', () => toggleQuery(q, item));
+    wrap.appendChild(item);
+  });
+}
+
+function setAllQueryVisibility(show) {
+  activeQueries.forEach((q, i) => {
+    if (show) visibleQueries.add(q);
+    else visibleQueries.delete(q);
+    if (chartInstance) {
+      chartInstance.data.datasets[i].hidden = !show;
+    }
+  });
+  if (chartInstance) chartInstance.update();
+  // 凡例アイテムの見た目を同期
+  document.querySelectorAll('#customLegend .legend-item').forEach(el => {
+    el.classList.toggle('dimmed', !show);
+  });
+}
+
+function toggleQuery(q, el) {
+  if (visibleQueries.has(q)) {
+    visibleQueries.delete(q);
+    el.classList.add('dimmed');
+  } else {
+    visibleQueries.add(q);
+    el.classList.remove('dimmed');
+  }
+  if (chartInstance) {
+    const idx = activeQueries.indexOf(q);
+    if (idx >= 0) {
+      const ds = chartInstance.data.datasets[idx];
+      ds.hidden = !visibleQueries.has(q);
+      chartInstance.update();
+    }
+  }
+}
+
+// ──────────────────────────────────────────────
+// Anomaly detection (±30% MoM)
+// ──────────────────────────────────────────────
+function detectAnomalies(metric, threshold = 0.30) {
+  const anomalies = [];
+  for (const q of activeQueries) {
+    for (let i = 1; i < activePeriods.length; i++) {
+      const prev = allData[activePeriods[i - 1]]?.[q];
+      const curr = allData[activePeriods[i]]?.[q];
+      if (!prev || !curr) continue;
+      const pv = prev[metric], cv = curr[metric];
+      if (!pv || pv === 0) continue;
+      const change = (cv - pv) / Math.abs(pv);
+      if (Math.abs(change) >= threshold) {
+        anomalies.push({
+          query: q,
+          from: activePeriods[i - 1],
+          to: activePeriods[i],
+          prevVal: pv,
+          currVal: cv,
+          change
+        });
+      }
+    }
+  }
+  return anomalies.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+}
+
+function renderAnomalyTable(metric) {
+  const metricLabel = document.getElementById('metricSelect').options[document.getElementById('metricSelect').selectedIndex].text;
+  const anomalies = detectAnomalies(metric);
+  document.getElementById('anomalyCount').textContent = anomalies.length;
+  document.getElementById('statAnomalies').textContent = anomalies.length;
+
+  const container = document.getElementById('anomalyTable');
+  if (anomalies.length === 0) {
+    container.innerHTML = '<div class="loading">異常候補なし（前月比 ±30% 未満）</div>';
+    return;
+  }
+
+  const isConv = metric === 'order_conversion';
+  const fmt = v => isConv ? (v * 100).toFixed(2) + '%' : v?.toLocaleString() ?? '-';
+
+  let html = `<table><thead><tr>
+    <th>クエリ</th><th>期間</th><th>前月値</th><th>当月値</th><th>変化率</th><th>検索数（当月）</th>
+  </tr></thead><tbody>`;
+
+  for (const a of anomalies) {
+    const dir = a.change > 0 ? '▲' : '▼';
+    const cls = Math.abs(a.change) >= 0.5 ? 'anomaly' : '';
+    const searches = allData[a.to]?.[a.query]?.searches?.toLocaleString() ?? '-';
+    html += `<tr>
+      <td><strong>${a.query}</strong></td>
+      <td>${a.from} → ${a.to}</td>
+      <td>${fmt(a.prevVal)}</td>
+      <td>${fmt(a.currVal)}</td>
+      <td class="${cls}">${dir} ${(Math.abs(a.change) * 100).toFixed(1)}%</td>
+      <td>${searches}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ──────────────────────────────────────────────
+// Summary table
+// ──────────────────────────────────────────────
+function renderSummaryTable() {
+  const tbody = document.getElementById('summaryTableBody');
+  const rows = activeQueries.map(q => {
+    const vals = activePeriods.map(p => allData[p]?.[q]).filter(Boolean);
+    const searches = vals.reduce((s, r) => s + (r.searches || 0), 0);
+    const cvs = vals.map(r => r.order_conversion).filter(v => v != null);
+    const avgCV = cvs.length ? cvs.reduce((a, b) => a + b, 0) / cvs.length : 0;
+    const maxCV = Math.max(...cvs);
+    const minCV = Math.min(...cvs);
+    return { q, periods: vals.length, searches, avgCV, maxCV, minCV, range: maxCV - minCV };
+  });
+  rows.sort((a, b) => b.searches - a.searches);
+
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td><strong>${r.q}</strong></td>
+    <td>${r.periods}</td>
+    <td>${r.searches.toLocaleString()}</td>
+    <td>${(r.avgCV * 100).toFixed(2)}%</td>
+    <td>${(r.maxCV * 100).toFixed(2)}%</td>
+    <td>${(r.minCV * 100).toFixed(2)}%</td>
+    <td ${r.range > 0.03 ? 'class="anomaly"' : ''}>${(r.range * 100).toFixed(2)}%</td>
+  </tr>`).join('');
+}
+
+// ──────────────────────────────────────────────
+// Stats
+// ──────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('statPeriods').textContent =
+    activePeriods.length < sortedPeriods.length
+      ? `${activePeriods.length} / ${sortedPeriods.length}`
+      : sortedPeriods.length;
+  const allQueries = new Set(activePeriods.flatMap(p => Object.keys(allData[p] || {})));
+  document.getElementById('statQueries').textContent = allQueries.size.toLocaleString();
+  document.getElementById('statShown').textContent = activeQueries.length;
+}
+
+// ──────────────────────────────────────────────
+// RAW data table
+// ──────────────────────────────────────────────
+let rawPage = 0;
+let rawSortDir = 'desc';
+
+const RAW_COLS = [
+  { key: 'query',                    label: 'クエリ',              fmt: v => v },
+  { key: 'searches',                 label: '検索数',              fmt: v => v?.toLocaleString() ?? '-' },
+  { key: 'search_visits',            label: '訪問数',              fmt: v => v?.toLocaleString() ?? '-' },
+  { key: 'orders',                   label: '注文数',              fmt: v => v?.toLocaleString() ?? '-' },
+  { key: 'order_conversion',         label: 'CV率',                fmt: v => v != null ? (v * 100).toFixed(3) + '%' : '-' },
+  { key: 'usd_revenue',              label: '売上USD',             fmt: v => v?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) ?? '-' },
+  { key: 'std_revenue',              label: '売上JPY',             fmt: v => v?.toLocaleString() ?? '-' },
+  { key: 'usd_revenue_per_search',   label: '検索あたりUSD',       fmt: v => v?.toFixed(4) ?? '-' },
+  { key: 'std_revenue_per_search',   label: '検索あたりJPY',       fmt: v => v?.toFixed(2) ?? '-' },
+  { key: 'usd_revenue_per_order',    label: '注文あたりUSD',       fmt: v => v?.toFixed(2) ?? '-' },
+  { key: 'std_revenue_per_order',    label: '注文あたりJPY',       fmt: v => v?.toLocaleString() ?? '-' },
+  { key: 'items_per_order',          label: '注文あたり点数',      fmt: v => v?.toFixed(4) ?? '-' },
+];
+
+function updateRawPeriodSelect() {
+  const sel = document.getElementById('rawPeriodSelect');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— 選択してください —</option>';
+  for (const p of sortedPeriods) {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    if (p === current) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  // 選択中の期間がなくなった場合はリセット
+  if (current && !sortedPeriods.includes(current)) sel.value = '';
+}
+
+function renderRawTable() {
+  const period = document.getElementById('rawPeriodSelect').value;
+  const wrap = document.getElementById('rawTableWrap');
+  if (!period) { wrap.innerHTML = '<div class="loading">期間を選択してください</div>'; return; }
+  const data = allData[period];
+  if (!data) { wrap.innerHTML = '<div class="loading">データがありません</div>'; return; }
+
+  const qFilter = document.getElementById('rawQuerySearch').value.trim().toLowerCase();
+  const sortCol = document.getElementById('rawSortCol').value;
+  const pageSize = parseInt(document.getElementById('rawPageSize').value);
+
+  let rows = Object.values(data);
+  if (qFilter) rows = rows.filter(r => String(r.query).toLowerCase().includes(qFilter));
+
+  rows.sort((a, b) => {
+    const av = a[sortCol], bv = b[sortCol];
+    if (sortCol === 'query') return rawSortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    return rawSortDir === 'asc' ? (av ?? 0) - (bv ?? 0) : (bv ?? 0) - (av ?? 0);
+  });
+
+  const total = rows.length;
+  let paged = rows;
+  let totalPages = 1;
+  if (pageSize > 0) {
+    totalPages = Math.ceil(total / pageSize);
+    rawPage = Math.min(rawPage, Math.max(0, totalPages - 1));
+    paged = rows.slice(rawPage * pageSize, (rawPage + 1) * pageSize);
+  }
+
+  // pagination info
+  const infoEl = document.getElementById('rawPageInfo');
+  if (pageSize > 0) {
+    const from = rawPage * pageSize + 1, to = Math.min((rawPage + 1) * pageSize, total);
+    infoEl.textContent = `${from}–${to} / ${total.toLocaleString()}件 (${rawPage + 1}/${totalPages}ページ)`;
+  } else {
+    infoEl.textContent = `全${total.toLocaleString()}件`;
+  }
+  document.getElementById('rawPrevBtn').disabled = rawPage === 0;
+  document.getElementById('rawNextBtn').disabled = pageSize === 0 || rawPage >= totalPages - 1;
+
+  // build table
+  let html = '<table><thead><tr>';
+  for (const col of RAW_COLS) {
+    const isSort = col.key === sortCol;
+    const cls = isSort ? (rawSortDir === 'asc' ? ' class="sort-asc"' : ' class="sort-desc"') : '';
+    html += `<th${cls} onclick="rawSortBy('${col.key}')" style="cursor:pointer">${col.label}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+  for (const row of paged) {
+    html += '<tr>';
+    for (const col of RAW_COLS) {
+      const val = row[col.key];
+      html += `<td>${col.fmt(val)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function rawSortBy(col) {
+  const current = document.getElementById('rawSortCol').value;
+  if (current === col) {
+    rawSortDir = rawSortDir === 'desc' ? 'asc' : 'desc';
+  } else {
+    document.getElementById('rawSortCol').value = col;
+    rawSortDir = 'desc';
+  }
+  rawPage = 0;
+  renderRawTable();
+}
+
+// ──────────────────────────────────────────────
+// Insight: period select sync
+// ──────────────────────────────────────────────
+function updateInsightPeriodSelect() {
+  const sel = document.getElementById('insightPeriodSelect');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— 選択してください —</option>';
+  for (const p of sortedPeriods) {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    if (p === current) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  // 新規読み込み時は最新期間をデフォルト選択
+  if (!current && sortedPeriods.length) sel.value = sortedPeriods[sortedPeriods.length - 1];
+}
+
+// ──────────────────────────────────────────────
+// Insight: 4象限チャート
+// ──────────────────────────────────────────────
+let quadrantChartInstance = null;
+
+function quadrantColor(clickRate, landingCV, medClickRate, medLandingCV) {
+  const highClick = clickRate >= medClickRate;
+  const highCV    = landingCV  >= medLandingCV;
+  if  ( highClick &&  highCV) return '#20bf6b'; // 優良
+  if  ( highClick && !highCV) return '#cc0000'; // 要改善
+  if  (!highClick &&  highCV) return '#f7b731'; // 隠れ優良
+  return '#bbbbbb';                              // 低優先
+}
+
+function renderInsight() {
+  const period = document.getElementById('insightPeriodSelect').value;
+  if (!period || !allData[period]) return;
+
+  const minSearches = parseInt(document.getElementById('insightMinSearches').value) || 0;
+  const bubbleCol   = document.getElementById('insightBubbleSize').value;
+  const data        = allData[period];
+
+  // フィルタ & 指標計算
+  const rows = Object.values(data).filter(r => (r.searches || 0) >= minSearches && (r.search_visits || 0) > 0);
+
+  const clickRates  = rows.map(r => r.searches > 0 ? r.search_visits / r.searches : 0);
+  const landingCVs  = rows.map(r => r.search_visits > 0 ? r.orders / r.search_visits : 0);
+
+  // 中央値を象限の境界に使う
+  const medClickRate  = median(clickRates);
+  const medLandingCV  = median(landingCVs);
+
+  // バブルサイズを正規化（最大40px相当）
+  const bubbleVals = rows.map(r => r[bubbleCol] || 0);
+  const maxBubble  = Math.max(...bubbleVals, 1);
+
+  const points = rows.map((r, i) => ({
+    x: clickRates[i],
+    y: landingCVs[i],
+    r: Math.max(4, Math.sqrt(bubbleVals[i] / maxBubble) * 28),
+    query: String(r.query),
+    searches: r.searches,
+    search_visits: r.search_visits,
+    orders: r.orders,
+    order_conversion: r.order_conversion,
+    usd_revenue: r.usd_revenue,
+    std_revenue: r.std_revenue,
+    bubbleVal: bubbleVals[i],
+    color: quadrantColor(clickRates[i], landingCVs[i], medClickRate, medLandingCV),
+  }));
+
+  if (quadrantChartInstance) quadrantChartInstance.destroy();
+
+  const ctx = document.getElementById('quadrantChart').getContext('2d');
+  quadrantChartInstance = new Chart(ctx, {
+    type: 'bubble',
+    data: {
+      datasets: [{
+        data: points,
+        backgroundColor: points.map(p => p.color + 'aa'),
+        borderColor:     points.map(p => p.color),
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const p = ctx.raw;
+              return [
+                `クエリ: ${p.query}`,
+                `検索数: ${p.searches?.toLocaleString()}`,
+                `クリック率: ${(p.x * 100).toFixed(1)}%`,
+                `ランディングCV: ${(p.y * 100).toFixed(2)}%`,
+                `総CV率: ${p.order_conversion != null ? (p.order_conversion * 100).toFixed(2) + '%' : '-'}`,
+                `売上JPY: ${p.std_revenue?.toLocaleString() ?? '-'}`,
+              ];
+            }
+          }
+        },
+        annotation: {
+          annotations: {
+            vLine: { type: 'line', xMin: medClickRate, xMax: medClickRate, borderColor: '#ccc', borderWidth: 1, borderDash: [4,4] },
+            hLine: { type: 'line', yMin: medLandingCV, yMax: medLandingCV, borderColor: '#ccc', borderWidth: 1, borderDash: [4,4] },
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'クリック率 (search_visits / searches)', font: { size: 11 } },
+          ticks: { callback: v => (v * 100).toFixed(0) + '%' }
+        },
+        y: {
+          title: { display: true, text: 'ランディングCV率 (orders / search_visits)', font: { size: 11 } },
+          ticks: { callback: v => (v * 100).toFixed(1) + '%' }
+        }
+      },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const p = points[elements[0].index];
+        renderFunnel(p, period, medClickRate, medLandingCV);
+      }
+    }
+  });
+
+  // 中央値ラインを手動描画（annotation pluginなしでも動くように）
+  addMedianLines(quadrantChartInstance, medClickRate, medLandingCV);
+
+  document.getElementById('funnelContent').innerHTML = '<div class="loading" style="padding:60px 0;">バブルをクリックしてください</div>';
+  document.getElementById('funnelSubtitle').textContent = `期間: ${period} / 表示件数: ${points.length}件 / 中央値クリック率: ${(medClickRate*100).toFixed(1)}% / 中央値ランディングCV: ${(medLandingCV*100).toFixed(2)}%`;
+}
+
+function addMedianLines(chart, medX, medY) {
+  const plugin = {
+    id: 'medianLines',
+    afterDraw(chart) {
+      const { ctx, scales: { x, y }, chartArea } = chart;
+      ctx.save();
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = '#bbb';
+      ctx.lineWidth = 1;
+      // vertical
+      const px = x.getPixelForValue(medX);
+      ctx.beginPath(); ctx.moveTo(px, chartArea.top); ctx.lineTo(px, chartArea.bottom); ctx.stroke();
+      // horizontal
+      const py = y.getPixelForValue(medY);
+      ctx.beginPath(); ctx.moveTo(chartArea.left, py); ctx.lineTo(chartArea.right, py); ctx.stroke();
+      // 象限ラベル
+      ctx.setLineDash([]);
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#bbb';
+      ctx.fillText('要改善', px + 4, py - 4);
+      ctx.fillText('優良', chartArea.right - 30, py - 4);
+      ctx.fillText('低優先', px + 4, chartArea.bottom - 4);
+      ctx.fillText('隠れ優良', chartArea.right - 50, chartArea.bottom - 4);
+      ctx.restore();
+    }
+  };
+  // 既存pluginを置き換えないよう一度だけ登録
+  if (!chart._medianPluginAdded) {
+    Chart.register(plugin);
+    chart._medianPluginAdded = true;
+    chart.update();
+  }
+}
+
+function median(arr) {
+  if (!arr.length) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// ──────────────────────────────────────────────
+// Insight: ファネル分解
+// ──────────────────────────────────────────────
+function renderFunnel(p, period, medClickRate, medLandingCV) {
+  const searches     = p.searches     || 0;
+  const searchVisits = p.search_visits || 0;
+  const orders       = p.orders        || 0;
+  const clickRate    = searches > 0       ? searchVisits / searches    : 0;
+  const landingCV    = searchVisits > 0   ? orders       / searchVisits : 0;
+  const totalCV      = p.order_conversion || 0;
+
+  // 全期間データ（比較用）
+  const allPeriodRows = sortedPeriods.map(per => {
+    const r = allData[per]?.[p.query];
+    return r ? { period: per, ...r } : null;
+  }).filter(Boolean);
+
+  const quadLabel = (() => {
+    const hC = clickRate  >= medClickRate;
+    const hV = landingCV  >= medLandingCV;
+    if ( hC &&  hV) return { label: '優良',     color: '#20bf6b' };
+    if ( hC && !hV) return { label: '要改善',   color: '#cc0000' };
+    if (!hC &&  hV) return { label: '隠れ優良', color: '#f7b731' };
+    return               { label: '低優先',     color: '#aaa' };
+  })();
+
+  // ファネルバー色
+  const barColors = ['#2980b9', '#8e44ad', '#cc0000'];
+
+  const fmtN  = v => (v || 0).toLocaleString();
+  const fmtP  = v => (v * 100).toFixed(2) + '%';
+  const fmtJP = v => '¥' + (v || 0).toLocaleString();
+
+  // 全期間推移テーブル
+  let trendHtml = `<table style="font-size:11px;width:100%;margin-top:6px;">
+    <thead><tr><th>期間</th><th>検索数</th><th>クリック率</th><th>ランディングCV</th><th>総CV率</th><th>売上JPY</th></tr></thead><tbody>`;
+  for (const r of allPeriodRows) {
+    const cr = r.searches > 0 ? r.search_visits / r.searches : 0;
+    const lv = r.search_visits > 0 ? r.orders / r.search_visits : 0;
+    const isCurrent = r.period === period;
+    trendHtml += `<tr style="${isCurrent ? 'background:#fff8f0;font-weight:600;' : ''}">
+      <td>${r.period}${isCurrent ? ' ◀' : ''}</td>
+      <td>${fmtN(r.searches)}</td>
+      <td>${fmtP(cr)}</td>
+      <td>${fmtP(lv)}</td>
+      <td>${fmtP(r.order_conversion || 0)}</td>
+      <td>${fmtJP(r.std_revenue)}</td>
+    </tr>`;
+  }
+  trendHtml += '</tbody></table>';
+
+  document.getElementById('funnelSubtitle').textContent = `選択中: "${p.query}"  期間: ${period}`;
+  document.getElementById('funnelContent').innerHTML = `
+    <div class="selected-query-card">
+      <strong>${p.query}</strong>
+      <span style="background:${quadLabel.color};color:white;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:8px;">${quadLabel.label}</span>
+      <div style="margin-top:6px;font-size:12px;color:#666;">
+        売上JPY: <b>${fmtJP(p.std_revenue)}</b>
+        検索数: <b>${fmtN(searches)}</b>
+        注文数: <b>${fmtN(orders)}</b>
+      </div>
+    </div>
+
+    <div class="funnel-section-title">ファネル（${period}）</div>
+    <div class="funnel-wrap">
+      <div class="funnel-row">
+        <div class="funnel-label">検索数</div>
+        <div class="funnel-bar-wrap">
+          <div class="funnel-bar" style="width:100%;background:${barColors[0]};">${fmtN(searches)}</div>
+        </div>
+        <div class="funnel-rate"></div>
+      </div>
+      <div class="funnel-arrow">↓</div>
+      <div class="funnel-row">
+        <div class="funnel-label">結果クリック</div>
+        <div class="funnel-bar-wrap">
+          <div class="funnel-bar" style="width:${(clickRate * 100).toFixed(1)}%;background:${barColors[1]};">${fmtN(searchVisits)}</div>
+        </div>
+        <div class="funnel-rate" style="color:${clickRate < medClickRate ? '#cc0000' : '#20bf6b'};">
+          ${fmtP(clickRate)}<br>
+          <span style="font-size:10px;color:#aaa;">中央値 ${fmtP(medClickRate)}</span>
+        </div>
+      </div>
+      <div class="funnel-arrow">↓</div>
+      <div class="funnel-row">
+        <div class="funnel-label">注文</div>
+        <div class="funnel-bar-wrap">
+          <div class="funnel-bar" style="width:${Math.min(landingCV * 100 * 5, 100).toFixed(1)}%;background:${barColors[2]};">${fmtN(orders)}</div>
+        </div>
+        <div class="funnel-rate" style="color:${landingCV < medLandingCV ? '#cc0000' : '#20bf6b'};">
+          ${fmtP(landingCV)}<br>
+          <span style="font-size:10px;color:#aaa;">中央値 ${fmtP(medLandingCV)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;padding:10px 14px;background:#f9f9f9;border-radius:6px;font-size:12px;line-height:1.8;">
+      <b>総CV率:</b> ${fmtP(totalCV)}
+      <b>検索あたり売上:</b> ¥${(p.std_revenue / Math.max(searches, 1)).toFixed(1)}
+      <b>注文あたり売上:</b> ${p.std_revenue && orders ? '¥' + Math.round(p.std_revenue / orders).toLocaleString() : '-'}
+    </div>
+
+    <div class="funnel-section-title" style="margin-top:16px;">全期間推移（参考）</div>
+    ${trendHtml}
+  `;
+}
+
+// ──────────────────────────────────────────────
+// Trend ranking (成長/衰退)
+// ──────────────────────────────────────────────
+let trendDetailChart = null;
+
+function linearSlope(values) {
+  // 欠損を除いたインデックス付きで最小二乗法
+  const pts = values.map((v, i) => [i, v]).filter(([, v]) => v != null && !isNaN(v));
+  if (pts.length < 2) return null;
+  const n = pts.length;
+  const sumX  = pts.reduce((s, [x]) => s + x, 0);
+  const sumY  = pts.reduce((s, [, y]) => s + y, 0);
+  const sumXY = pts.reduce((s, [x, y]) => s + x * y, 0);
+  const sumX2 = pts.reduce((s, [x]) => s + x * x, 0);
+  const denom = n * sumX2 - sumX * sumX;
+  if (denom === 0) return 0;
+  return (n * sumXY - sumX * sumY) / denom;
+}
+
+function renderTrend() {
+  const container = document.getElementById('trendContent');
+  if (activePeriods.length < 2) {
+    container.innerHTML = '<div class="loading">2期間以上読み込んでください</div>';
+    return;
+  }
+
+  const metric      = document.getElementById('trendMetric').value;
+  const minSearches = parseInt(document.getElementById('trendMinSearches').value) || 0;
+  const topN        = parseInt(document.getElementById('trendTopN').value) || 20;
+
+  const metricLabel = document.getElementById('trendMetric').options[document.getElementById('trendMetric').selectedIndex].text;
+  const isConv      = metric === 'order_conversion';
+  const fmtVal      = v => v == null ? '-' : isConv ? (v * 100).toFixed(2) + '%' : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const fmtSlope    = s => s == null ? '-' : (s >= 0 ? '+' : '') + (isConv ? (s * 100).toFixed(3) + '%/月' : s.toFixed(isConv ? 3 : 1) + '/月');
+
+  // 全クエリを集計
+  const allQ = new Set(activePeriods.flatMap(p => Object.keys(allData[p] || {})));
+  const results = [];
+
+  for (const q of allQ) {
+    const totalSearches = activePeriods.reduce((s, p) => s + (allData[p]?.[q]?.searches || 0), 0);
+    if (totalSearches < minSearches) continue;
+
+    const vals    = activePeriods.map(p => allData[p]?.[q]?.[metric] ?? null);
+    const present = vals.filter(v => v != null);
+    if (present.length < 2) continue;
+
+    const slope    = linearSlope(vals);
+    const first    = present[0];
+    const last     = present[present.length - 1];
+    const relChange = first !== 0 && first != null ? (last - first) / Math.abs(first) : null;
+
+    results.push({ q, slope, vals, first, last, relChange, totalSearches });
+  }
+
+  // 傾きでソート
+  const growing  = [...results].sort((a, b) => b.slope - a.slope).slice(0, topN);
+  const decaying = [...results].sort((a, b) => a.slope - b.slope).slice(0, topN);
+
+  const maxAbsSlope = Math.max(...results.map(r => Math.abs(r.slope)), 1);
+
+  function buildRows(list, colorClass, color, groupKey) {
+    return list.map((r, i) => {
+      const barPct = Math.min(Math.abs(r.slope) / maxAbsSlope * 100, 100).toFixed(1);
+      const sparkId = `spark_${groupKey}_${i}`;
+      return `
+        <div class="trend-bar-row" onclick="showTrendDetail('${r.q.replace(/'/g,"\\'")}', '${metric}', '${metricLabel}')">
+          <div class="trend-rank">${i + 1}</div>
+          <div class="trend-query" title="${r.q}">${r.q}</div>
+          <div class="trend-bar-wrap">
+            <div class="trend-bar-fill" style="width:${barPct}%;background:${color}88;"></div>
+          </div>
+          <div class="trend-val ${colorClass}">
+            ${fmtSlope(r.slope)}<br>
+            <span style="font-size:10px;color:#aaa;">${fmtVal(r.first)} → ${fmtVal(r.last)}</span>
+          </div>
+          <canvas class="trend-spark" id="${sparkId}" width="80" height="28"></canvas>
+        </div>`;
+    }).join('');
+  }
+
+  container.innerHTML = `
+    <div class="trend-grid">
+      <div>
+        <div class="trend-section-title">
+          <span class="trend-up-label">▲ 成長ワード TOP${topN}</span>
+          <span style="font-size:11px;color:#aaa;font-weight:400;">傾き（${metricLabel}/月）が大きい順</span>
+        </div>
+        ${buildRows(growing, 'trend-up-label', '#20bf6b', 'growing')}
+      </div>
+      <div>
+        <div class="trend-section-title">
+          <span class="trend-down-label">▼ 衰退ワード TOP${topN}</span>
+          <span style="font-size:11px;color:#aaa;font-weight:400;">傾きが小さい（下落）順</span>
+        </div>
+        ${buildRows(decaying, 'trend-down-label', '#cc0000', 'decaying')}
+      </div>
+    </div>
+    <div class="trend-detail-card" id="trendDetailCard" style="display:none;">
+      <div class="trend-detail-title" id="trendDetailTitle"></div>
+      <div class="trend-detail-wrap"><canvas id="trendDetailChart"></canvas></div>
+    </div>`;
+
+  // スパークライン描画（次フレームでDOM確定後）
+  requestAnimationFrame(() => {
+    [...growing.map((r, i) => ({ r, id: `spark_growing_${i}` })),
+     ...decaying.map((r, i) => ({ r, id: `spark_decaying_${i}` }))]
+    .forEach(({ r, id }) => {
+      const c = document.getElementById(id);
+      if (!c) return;
+      drawSparkline(c, r.vals, isConv);
+    });
+  });
+}
+
+function drawSparkline(canvas, vals, isConv) {
+  const present = vals.filter(v => v != null);
+  if (present.length < 2) return;
+  const w = canvas.width, h = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  const min = Math.min(...present), max = Math.max(...present);
+  const range = max - min || 1;
+  const pad = 3;
+  const xs = vals.map((_, i) => pad + (i / (vals.length - 1)) * (w - pad * 2));
+  ctx.beginPath();
+  ctx.strokeStyle = '#999';
+  ctx.lineWidth = 1.5;
+  let started = false;
+  vals.forEach((v, i) => {
+    if (v == null) return;
+    const x = xs[i];
+    const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+    if (!started) { ctx.moveTo(x, y); started = true; }
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  // 最後の点
+  const lastIdx = vals.map((v, i) => v != null ? i : -1).filter(i => i >= 0).pop();
+  if (lastIdx != null) {
+    const lx = xs[lastIdx];
+    const ly = pad + (1 - (vals[lastIdx] - min) / range) * (h - pad * 2);
+    const first = present[0], last = present[present.length - 1];
+    ctx.beginPath();
+    ctx.arc(lx, ly, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = last >= first ? '#20bf6b' : '#cc0000';
+    ctx.fill();
+  }
+}
+
+function showTrendDetail(query, metric, metricLabel) {
+  const card  = document.getElementById('trendDetailCard');
+  const title = document.getElementById('trendDetailTitle');
+  card.style.display = 'block';
+  title.textContent  = `「${query}」の ${metricLabel} 推移`;
+
+  const vals   = activePeriods.map(p => allData[p]?.[query]?.[metric] ?? null);
+  const isConv = metric === 'order_conversion';
+
+  if (trendDetailChart) trendDetailChart.destroy();
+  const ctx = document.getElementById('trendDetailChart').getContext('2d');
+  trendDetailChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: activePeriods,
+      datasets: [{
+        label: metricLabel,
+        data: vals,
+        borderColor: '#cc0000',
+        backgroundColor: '#cc000022',
+        tension: 0.3,
+        pointRadius: 5,
+        fill: true,
+        spanGaps: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: v => isConv ? (v * 100).toFixed(1) + '%' : v.toLocaleString() } }
+      }
+    }
+  });
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ──────────────────────────────────────────────
+// Tab & misc
+// ──────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const tabs = ['chart', 'anomaly', 'table', 'raw', 'insight', 'trend'];
+    t.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === 'tab-' + name);
+  });
+  if (name === 'raw') renderRawTable();
+  if (name === 'insight' && document.getElementById('insightPeriodSelect').value) renderInsight();
+  if (name === 'trend') renderTrend();
+}
+
+function resetZoom() {
+  if (chartInstance) chartInstance.resetZoom();
+}
+
+document.getElementById('filterMode').addEventListener('change', () => {
+  const mode = document.getElementById('filterMode').value;
+  document.getElementById('filterValueLabel').textContent =
+    mode === 'min_searches' ? '最小検索数' : '件数';
+  document.getElementById('filterValue').value =
+    mode === 'min_searches' ? '10000' : '20';
+});
+</script>
+</body>
+</html>

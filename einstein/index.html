@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Einstein Recommender Dashboard</title>
+<script>
+  if (sessionStorage.getItem('nb_dashboard_auth') !== '1') { window.location.href = '../'; }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; font-size: 14px; }
+
+header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+header h1 { font-size: 17px; font-weight: 700; }
+header span { font-size: 12px; opacity: 0.7; }
+
+.controls { background: #fff; padding: 14px 24px; border-bottom: 1px solid #ddd; display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.control-group { display: flex; flex-direction: column; gap: 4px; }
+label { font-size: 11px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+select, input[type=number], input[type=text] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background: #fff; }
+select { min-width: 150px; }
+input[type=number] { width: 80px; }
+input[type=text] { width: 180px; }
+button { padding: 7px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; }
+.btn-secondary { background: #eee; color: #333; }
+.btn-secondary:hover { background: #ddd; }
+
+.file-upload-area { display: flex; flex-direction: column; gap: 4px; }
+.file-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.file-badge {
+  border-radius: 12px; padding: 3px 12px; font-size: 11px; font-weight: 600;
+  border: 1.5px solid #ccc; background: #f0f0f0; color: #aaa;
+}
+.file-badge.loaded {
+  background: #e8f5e9; border-color: #4caf50; color: #2e7d32;
+  cursor: pointer; transition: all .15s;
+}
+.file-badge.loaded:hover { background: #c8e6c9; }
+.file-badge.disabled {
+  background: #f5f5f5; border-color: #ddd; color: #bbb;
+  text-decoration: line-through; cursor: pointer;
+}
+.file-badge.disabled:hover { background: #eee; }
+.hint { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+.main { padding: 18px 24px; max-width: 1400px; margin: 0 auto; }
+
+.stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.stat-card { background: #fff; border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.stat-label { font-size: 11px; color: #888; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; }
+.stat-value { font-size: 24px; font-weight: 800; color: #1a1a2e; line-height: 1.1; }
+.stat-sub { font-size: 11px; color: #aaa; margin-top: 2px; }
+
+.tab-bar { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #eee; overflow-x: auto; }
+.tab { padding: 8px 16px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #666; font-weight: 500; white-space: nowrap; }
+.tab.active { border-bottom-color: #1a1a2e; color: #1a1a2e; font-weight: 700; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.anomaly-badge { display: inline-block; background: #fff3f3; border: 1px solid #ffaaaa; color: #c0392b; border-radius: 10px; font-size: 10px; padding: 1px 6px; margin-left: 4px; }
+
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 18px 20px; }
+.chart-card h3 { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 4px; }
+.chart-card .sub { font-size: 11px; color: #999; margin-bottom: 12px; }
+.chart-wrap { position: relative; height: 280px; }
+.chart-full { grid-column: 1 / -1; }
+.chart-full .chart-wrap { height: 340px; }
+
+.legend-wrap { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; cursor: pointer; padding: 2px 8px; border-radius: 3px; }
+.legend-item:hover { background: #f5f5f5; }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.legend-item.dimmed { opacity: 0.3; }
+.legend-controls { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.legend-toggle-btn { padding: 2px 10px; border-radius: 10px; border: 1px solid #ccc; font-size: 11px; cursor: pointer; background: #fafafa; color: #555; font-weight: 600; transition: background .15s; }
+.legend-toggle-btn:hover { background: #e0e0e0; border-color: #aaa; }
+
+/* Insight */
+.insight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+.insight-card { background: #fff; border-radius: 8px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-left: 4px solid #1a1a2e; }
+.insight-card.warn { border-left-color: #e67e22; }
+.insight-card.good { border-left-color: #27ae60; }
+.insight-card.info { border-left-color: #2980b9; }
+.insight-card.action { border-left-color: #8e44ad; }
+.insight-card h4 { font-size: 11px; font-weight: 700; color: #555; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.04em; }
+.insight-card .insight-value { font-size: 22px; font-weight: 800; color: #1a1a2e; }
+.insight-card .insight-body { font-size: 12px; color: #555; margin-top: 6px; line-height: 1.6; }
+.insight-card table { width: 100%; font-size: 12px; margin-top: 8px; border-collapse: collapse; }
+.insight-card td { padding: 4px; vertical-align: top; border-bottom: 1px solid #f0f0f0; }
+.insight-card tr:last-child td { border-bottom: none; }
+.insight-card td:last-child { text-align: right; font-weight: 700; white-space: nowrap; color: #1a1a2e; }
+.insight-card .action-tag { display: inline-block; background: #e8f5e9; color: #2e7d32; border-radius: 4px; font-size: 10px; padding: 1px 6px; font-weight: 700; margin-left: 4px; }
+.insight-card .warn-tag { background: #fff3e0; color: #e65100; }
+
+/* Scatter */
+.quadrant-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; font-size: 11px; color: #555; }
+.ql-item { padding: 8px 10px; border-radius: 6px; line-height: 1.5; }
+
+/* Table */
+.table-wrap { overflow-x: auto; }
+table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.data-table th { background: #fafafa; border-bottom: 2px solid #eee; padding: 8px 10px; text-align: left; font-weight: 700; white-space: nowrap; cursor: pointer; user-select: none; }
+table.data-table th:hover { background: #f0f0f0; }
+table.data-table td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+table.data-table tr:hover td { background: #fafafa; }
+th.sort-asc::after { content: ' ▲'; font-size: 9px; }
+th.sort-desc::after { content: ' ▼'; font-size: 9px; }
+.badge-up { color: #27ae60; font-weight: 700; }
+.badge-down { color: #c0392b; font-weight: 700; }
+
+.loading { text-align: center; padding: 40px; color: #aaa; font-size: 13px; }
+.raw-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 14px; }
+
+@media(max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } .insight-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Einstein Recommender Performance Dashboard</h1>
+    <span>レコメンダー別 月次パフォーマンス分析</span>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="file-upload-area">
+    <label>CSVファイルを読み込む（複数選択可）</label>
+    <input type="file" id="fileInput" multiple accept=".csv" style="font-size:13px;">
+    <div class="file-list" id="fileList"></div>
+    <div class="hint">ファイル名の日付（YYYY-MM-DD_YYYY-MM-DD）から期間を自動取得 / バッジをクリックで表示・非表示</div>
+  </div>
+
+  <div class="control-group">
+    <label>サイト</label>
+    <select id="siteFilter" onchange="renderAll()">
+      <option value="">すべて</option>
+    </select>
+  </div>
+
+  <div class="control-group">
+    <label>指標（推移グラフ）</label>
+    <select id="metricSelect" onchange="renderAll()">
+      <option value="std_attributed_revenue">売上 (JPY)</option>
+      <option value="order_count">注文数</option>
+      <option value="clicks_count">クリック数</option>
+      <option value="recommender_views_count">表示回数</option>
+      <option value="add_to_cart_count">カート追加数</option>
+      <option value="ctr">CTR</option>
+      <option value="atc_rate">ATC Rate</option>
+      <option value="conversion_rate">Conversion Rate</option>
+    </select>
+  </div>
+
+  <div class="control-group">
+    <label>フィルタ方法</label>
+    <select id="filterMode" onchange="renderAll()">
+      <option value="top_views">表示回数 上位</option>
+      <option value="top_revenue">売上 上位</option>
+      <option value="top_conversion">CV率 上位</option>
+      <option value="top_orders">注文数 上位</option>
+    </select>
+  </div>
+
+  <div class="control-group">
+    <label>件数</label>
+    <input type="number" id="filterValue" value="10" min="1" max="50" onchange="renderAll()">
+  </div>
+
+  <div class="control-group">
+    <label>名前で絞り込み</label>
+    <input type="text" id="nameSearch" placeholder="例: minicart, recently..." oninput="renderAll()">
+  </div>
+
+  <button class="btn-secondary" onclick="resetZoom()">ズームリセット</button>
+</div>
+
+<div class="main">
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">有効期間 / 読込済</div>
+      <div class="stat-value" id="statPeriods">-</div>
+      <div class="stat-sub">月次ファイル（バッジで切替）</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">ユニークレコメンダー</div>
+      <div class="stat-value" id="statRecs">-</div>
+      <div class="stat-sub">有効期間内</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">表示中</div>
+      <div class="stat-value" id="statShown">-</div>
+      <div class="stat-sub">件</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">異常検知候補</div>
+      <div class="stat-value" id="statAnomalies">-</div>
+      <div class="stat-sub">前月比 ±30%以上</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">総売上（有効期間）</div>
+      <div class="stat-value" id="statRevenue">-</div>
+      <div class="stat-sub">JPY</div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab('trend')">推移グラフ</div>
+    <div class="tab" onclick="switchTab('overview')">サマリー比較</div>
+    <div class="tab" onclick="switchTab('scatter')">ポートフォリオ分析</div>
+    <div class="tab" onclick="switchTab('insight')">インサイト</div>
+    <div class="tab" onclick="switchTab('anomaly')">異常検知 <span class="anomaly-badge" id="anomalyCount">-</span></div>
+    <div class="tab" onclick="switchTab('table')">集計テーブル</div>
+    <div class="tab" onclick="switchTab('raw')">RAWデータ</div>
+  </div>
+
+  <!-- TREND -->
+  <div class="tab-content active" id="tab-trend">
+    <div class="chart-card chart-full">
+      <h3 id="trendTitle">指標の月次推移</h3>
+      <div class="sub" id="trendSub">CSVファイルを読み込むとグラフが表示されます</div>
+      <div class="legend-controls">
+        <button class="legend-toggle-btn" onclick="setAllVisible('trend', true)">すべて表示</button>
+        <button class="legend-toggle-btn" onclick="setAllVisible('trend', false)">すべて非表示</button>
+      </div>
+      <div class="legend-wrap" id="trendLegend"></div>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="tab-content" id="tab-overview">
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>CTR（クリックスルー率）</h3>
+        <div class="sub">レコメンド商品のクリック率</div>
+        <div class="chart-wrap"><canvas id="ctrChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Conversion Rate（CV率）</h3>
+        <div class="sub">クリック→購入の転換率</div>
+        <div class="chart-wrap"><canvas id="convChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>ATC Rate（カート追加率）</h3>
+        <div class="sub">クリック→カート追加の転換率</div>
+        <div class="chart-wrap"><canvas id="atcChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Revenue per View（View当たり売上 JPY）</h3>
+        <div class="sub">露出の「稼ぐ力」</div>
+        <div class="chart-wrap"><canvas id="rpvChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCATTER -->
+  <div class="tab-content" id="tab-scatter">
+    <div class="chart-card chart-full">
+      <h3>ポートフォリオ分析（CTR × CV率 / バブルサイズ = 売上）</h3>
+      <div class="sub">点線は各指標の平均値。どの象限に位置するかで改善アクションを特定できます。</div>
+      <div class="legend-controls">
+        <button class="legend-toggle-btn" onclick="setAllVisible('scatter', true)">すべて表示</button>
+        <button class="legend-toggle-btn" onclick="setAllVisible('scatter', false)">すべて非表示</button>
+      </div>
+      <div class="legend-wrap" id="scatterLegend"></div>
+      <div class="chart-wrap" style="height:460px"><canvas id="scatterChart"></canvas></div>
+      <div class="quadrant-legend">
+        <div class="ql-item" style="background:#f0fff4;border:1px solid #c6f0d2">
+          <strong>🟢 右上（高CTR × 高CV）</strong><br>最も優秀な配置。現状維持・拡大投資を検討
+        </div>
+        <div class="ql-item" style="background:#fffbf0;border:1px solid #fde9a0">
+          <strong>🟡 左上（低CTR × 高CV）</strong><br>クリックされれば買われる。表示面積・掲載位置を拡大すると売上直結
+        </div>
+        <div class="ql-item" style="background:#f0f6ff;border:1px solid #b8d4f8">
+          <strong>🔵 右下（高CTR × 低CV）</strong><br>興味は引くが購入に至らない。提案商品の価格帯・在庫・関連性を見直し
+        </div>
+        <div class="ql-item" style="background:#fff5f5;border:1px solid #fdb8b8">
+          <strong>🔴 左下（低CTR × 低CV）</strong><br>要改善。アルゴリズムと配置の両面でレビューが必要
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSIGHT -->
+  <div class="tab-content" id="tab-insight">
+    <div class="insight-grid" id="insightGrid">
+      <div class="insight-card"><div class="loading">データを読み込んでください</div></div>
+    </div>
+  </div>
+
+  <!-- ANOMALY -->
+  <div class="tab-content" id="tab-anomaly">
+    <div class="chart-card">
+      <h3>異常検知レポート</h3>
+      <div class="sub">有効期間の連続月で前月比 ±30% 以上変動したレコメンダーを表示（表示中のみ対象）</div>
+      <div id="anomalyTable"><div class="loading">データを読み込んでください</div></div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="tab-content" id="tab-table">
+    <div class="chart-card">
+      <h3>集計テーブル（有効期間サマリー）</h3>
+      <div class="sub">ヘッダーをクリックしてソート</div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th onclick="sortSummary('name')">レコメンダー</th>
+            <th onclick="sortSummary('site')">サイト</th>
+            <th onclick="sortSummary('periods')">期間数</th>
+            <th onclick="sortSummary('views')">総Views</th>
+            <th onclick="sortSummary('clicks')">総Clicks</th>
+            <th onclick="sortSummary('orders')">総Orders</th>
+            <th onclick="sortSummary('revenue')">総売上(JPY)</th>
+            <th onclick="sortSummary('ctr')">平均CTR</th>
+            <th onclick="sortSummary('conv')">平均CV率</th>
+            <th onclick="sortSummary('rpv')">売上/View</th>
+            <th onclick="sortSummary('atc')">平均ATC率</th>
+          </tr></thead>
+          <tbody id="summaryBody"><tr><td colspan="11" class="loading">データを読み込んでください</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RAW -->
+  <div class="tab-content" id="tab-raw">
+    <div class="chart-card">
+      <h3>RAWデータ</h3>
+      <div class="raw-controls">
+        <div class="control-group">
+          <label>期間</label>
+          <select id="rawPeriod" onchange="renderRawTable()">
+            <option value="">— 選択してください —</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>絞り込み</label>
+          <input type="text" id="rawSearch" placeholder="レコメンダー名..." oninput="rawPage=0;renderRawTable()">
+        </div>
+        <div class="control-group">
+          <label>並び替え</label>
+          <select id="rawSort" onchange="rawPage=0;renderRawTable()">
+            <option value="recommender_views_count">Views</option>
+            <option value="std_attributed_revenue">売上JPY</option>
+            <option value="order_count">注文数</option>
+            <option value="conversion_rate">CV率</option>
+            <option value="ctr">CTR</option>
+            <option value="recommender_name">名前</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>件数</label>
+          <select id="rawPageSize" onchange="rawPage=0;renderRawTable()">
+            <option value="50">50件</option>
+            <option value="100">100件</option>
+            <option value="0">全件</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:6px;">
+          <button class="btn-secondary" onclick="rawPage=Math.max(0,rawPage-1);renderRawTable()">← 前</button>
+          <span id="rawPageInfo" style="font-size:12px;color:#666;align-self:center;white-space:nowrap"></span>
+          <button class="btn-secondary" onclick="rawPage++;renderRawTable()">次 →</button>
+        </div>
+      </div>
+      <div class="table-wrap" id="rawTableWrap"><div class="loading">期間を選択してください</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────
+let allData       = {};   // { "YYYY-MM": [{recommender_name, site, ...}] }
+let sortedPeriods = [];   // all loaded periods, sorted
+let disabledPeriods = new Set();   // periods toggled off by user
+let activeRecs       = [];
+let visibleRecs      = new Set();  // trend chart
+let scatterRecs      = [];         // all recs in scatter (name → index)
+let visibleScatter   = new Set();  // scatter visibility
+let summarySort   = { col: 'revenue', dir: 'desc' };
+let rawPage       = 0;
+let rawSortDir    = 'desc';
+let scatterDirty  = true;
+
+const CHARTS = {};
+
+const COLORS = [
+  '#2563eb','#dc2626','#16a34a','#d97706','#7c3aed',
+  '#0891b2','#be185d','#65a30d','#9333ea','#0f766e',
+  '#c2410c','#1d4ed8','#b91c1c','#15803d','#b45309',
+  '#6d28d9','#0369a1',
+];
+
+// ──────────────────────────────────────────────
+// Active periods (respects toggle state)
+// ──────────────────────────────────────────────
+function getActivePeriods() {
+  return sortedPeriods.filter(p => !disabledPeriods.has(p));
+}
+
+// ──────────────────────────────────────────────
+// File loading
+// ──────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  for (const file of Array.from(e.target.files)) {
+    try {
+      const period = extractPeriod(file.name);
+      const rows   = parseCSV(await file.text());
+
+      if (!allData[period]) allData[period] = [];
+      for (const row of rows) {
+        const key = row.recommender_name + '|' + row.site;
+        allData[period] = allData[period].filter(r => r.recommender_name + '|' + r.site !== key);
+        allData[period].push(row);
+      }
+
+      // Create or refresh toggleable badge (keyed by period)
+      const badgeId = 'pbadge_' + period;
+      let badge = document.getElementById(badgeId);
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.id = badgeId;
+        badge.dataset.period = period;
+        badge.title = 'クリックで表示/非表示を切り替え';
+        badge.addEventListener('click', () => togglePeriodBadge(period));
+        document.getElementById('fileList').appendChild(badge);
+      }
+      badge.className = 'file-badge loaded';
+      badge.textContent = '✓ ' + period;
+    } catch(err) { console.error(file.name, err); }
+  }
+
+  sortedPeriods = Object.keys(allData).sort();
+  updateSiteFilter();
+  updateRawPeriodSelect();
+  renderAll();
+});
+
+function togglePeriodBadge(period) {
+  const badge = document.getElementById('pbadge_' + period);
+  if (disabledPeriods.has(period)) {
+    disabledPeriods.delete(period);
+    if (badge) { badge.className = 'file-badge loaded'; badge.textContent = '✓ ' + period; }
+  } else {
+    disabledPeriods.add(period);
+    if (badge) { badge.className = 'file-badge disabled'; badge.textContent = '– ' + period; }
+  }
+  scatterDirty = true;
+  renderAll();
+}
+
+function extractPeriod(filename) {
+  const m = filename.match(/(\d{4}-\d{2})-\d{2}_\d{4}-\d{2}-\d{2}/);
+  if (m) return m[1];
+  const m2 = filename.match(/(\d{4}-\d{2})/);
+  if (m2) return m2[1];
+  return filename.replace(/\.[^.]+$/, '');
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const header = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, '').trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCSVLine(lines[i]);
+    if (vals.length < 2) continue;
+    const row = {};
+    header.forEach((h, j) => {
+      const v = (vals[j] || '').replace(/^"|"$/g, '').trim();
+      row[h] = isNaN(v) || v === '' ? v : parseFloat(v);
+    });
+    if (row.recommender_name) rows.push(row);
+  }
+  return rows;
+}
+
+function parseCSVLine(line) {
+  const result = []; let cur = '', inQ = false;
+  for (const c of line) {
+    if (c === '"') inQ = !inQ;
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else cur += c;
+  }
+  result.push(cur);
+  return result;
+}
+
+// ──────────────────────────────────────────────
+// Site filter
+// ──────────────────────────────────────────────
+function updateSiteFilter() {
+  const sites = new Set();
+  for (const rows of Object.values(allData)) for (const r of rows) sites.add(r.site);
+  const sel = document.getElementById('siteFilter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">すべて</option>';
+  for (const s of [...sites].sort()) {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    if (s === cur) o.selected = true;
+    sel.appendChild(o);
+  }
+}
+
+// ──────────────────────────────────────────────
+// Data helpers
+// ──────────────────────────────────────────────
+function getRows(period) {
+  const site = document.getElementById('siteFilter').value;
+  const rows = allData[period] || [];
+  return site ? rows.filter(r => r.site === site) : rows;
+}
+
+function aggregateAll() {
+  const agg = {};
+  for (const p of getActivePeriods()) {
+    for (const r of getRows(p)) {
+      const k = r.recommender_name;
+      if (!agg[k]) agg[k] = { totalViews:0, totalRevenue:0, totalOrders:0, totalClicks:0, totalAtc:0, periods:0 };
+      agg[k].totalViews   += r.recommender_views_count || 0;
+      agg[k].totalRevenue += r.std_attributed_revenue  || 0;
+      agg[k].totalOrders  += r.order_count             || 0;
+      agg[k].totalClicks  += r.clicks_count            || 0;
+      agg[k].totalAtc     += r.add_to_cart_count       || 0;
+      agg[k].periods++;
+    }
+  }
+  return agg;
+}
+
+function getTopRecs() {
+  const mode   = document.getElementById('filterMode').value;
+  const n      = parseInt(document.getElementById('filterValue').value) || 10;
+  const filter = document.getElementById('nameSearch').value.trim().toLowerCase();
+  const agg    = aggregateAll();
+  let entries  = Object.entries(agg);
+  if (filter) entries = entries.filter(([k]) => k.toLowerCase().includes(filter));
+  const sorters = {
+    top_views:      ([,a],[,b]) => b.totalViews    - a.totalViews,
+    top_revenue:    ([,a],[,b]) => b.totalRevenue  - a.totalRevenue,
+    top_conversion: ([,a],[,b]) => (b.totalOrders/Math.max(b.totalClicks,1)) - (a.totalOrders/Math.max(a.totalClicks,1)),
+    top_orders:     ([,a],[,b]) => b.totalOrders   - a.totalOrders,
+  };
+  entries.sort(sorters[mode] || sorters.top_views);
+  return entries.slice(0, n).map(([k]) => k);
+}
+
+function getVal(period, recName, metric) {
+  const site = document.getElementById('siteFilter').value;
+  const row = (allData[period] || []).find(r =>
+    r.recommender_name === recName && (!site || r.site === site));
+  if (!row) return null;
+  if (metric === 'rpv') return row.recommender_views_count > 0
+    ? row.std_attributed_revenue / row.recommender_views_count : 0;
+  return row[metric] ?? null;
+}
+
+// ──────────────────────────────────────────────
+// Main render
+// ──────────────────────────────────────────────
+function renderAll() {
+  if (sortedPeriods.length === 0) return;
+  activeRecs = getTopRecs();
+  visibleRecs = new Set(activeRecs);
+  scatterDirty = true;
+
+  updateStats();
+  renderTrendChart();
+  renderOverviewCharts();
+  renderInsights();
+  renderAnomalyTable();
+  renderSummaryTable();
+
+  if (document.getElementById('tab-scatter').classList.contains('active')) {
+    renderScatterChart();
+    scatterDirty = false;
+  }
+}
+
+// ──────────────────────────────────────────────
+// Trend chart
+// ──────────────────────────────────────────────
+function renderTrendChart() {
+  const metric = document.getElementById('metricSelect').value;
+  const LABELS = {
+    std_attributed_revenue:'売上 (JPY)', order_count:'注文数',
+    clicks_count:'クリック数', recommender_views_count:'表示回数',
+    add_to_cart_count:'カート追加数', ctr:'CTR',
+    atc_rate:'ATC Rate', conversion_rate:'Conversion Rate'
+  };
+  const isPct = ['ctr','atc_rate','conversion_rate'].includes(metric);
+  const ap = getActivePeriods();
+
+  const datasets = activeRecs.map((rec, i) => ({
+    label: rec,
+    data: ap.map(p => { const v = getVal(p, rec, metric); return v == null ? null : isPct ? v * 100 : v; }),
+    borderColor: COLORS[i % COLORS.length],
+    backgroundColor: COLORS[i % COLORS.length] + '22',
+    tension: 0.3, pointRadius: 5, pointHoverRadius: 7,
+    fill: false, hidden: !visibleRecs.has(rec),
+  }));
+
+  document.getElementById('trendTitle').textContent = `${LABELS[metric] || metric} の月次推移`;
+  document.getElementById('trendSub').textContent   = `表示: ${activeRecs.length}件 / 有効期間: ${ap.join(', ')}`;
+
+  destroyChart('trendChart');
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  CHARTS.trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: ap, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmtMetric(c.raw, isPct ? 'pct_raw' : metric)}` } },
+        zoom: { zoom: { wheel:{enabled:true}, pinch:{enabled:true}, mode:'x' }, pan:{enabled:true,mode:'x'} }
+      },
+      scales: {
+        y: { ticks: { callback: v => isPct ? v.toFixed(1)+'%' : fmtNum(v) }, grid:{color:'#f0f0f0'} },
+        x: { grid:{display:false} }
+      }
+    }
+  });
+  buildLegend('trendLegend', activeRecs, 'trendChart');
+}
+
+// ──────────────────────────────────────────────
+// Overview charts
+// ──────────────────────────────────────────────
+function renderOverviewCharts() {
+  const ap = getActivePeriods();
+  const cfgs = [
+    { id:'ctrChart',  metric:'ctr',            pct:true  },
+    { id:'convChart', metric:'conversion_rate', pct:true  },
+    { id:'atcChart',  metric:'atc_rate',        pct:true  },
+    { id:'rpvChart',  metric:'rpv',             pct:false },
+  ];
+  for (const { id, metric, pct } of cfgs) {
+    const datasets = activeRecs.map((rec, i) => ({
+      label: rec,
+      data: ap.map(p => { const v = getVal(p, rec, metric); return v == null ? null : pct ? v * 100 : v; }),
+      borderColor: COLORS[i % COLORS.length],
+      backgroundColor: COLORS[i % COLORS.length] + '22',
+      tension: 0.3, pointRadius: 4, pointHoverRadius: 6, fill: false,
+    }));
+    destroyChart(id);
+    CHARTS[id] = new Chart(document.getElementById(id).getContext('2d'), {
+      type: 'line',
+      data: { labels: ap, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode:'index', intersect:false },
+        plugins: {
+          legend: { display:false },
+          tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${pct ? c.raw.toFixed(2)+'%' : '¥'+fmtNum(c.raw)}` } }
+        },
+        scales: {
+          y: { ticks: { callback: v => pct ? v.toFixed(1)+'%' : '¥'+fmtNum(v) }, grid:{color:'#f0f0f0'} },
+          x: { grid:{display:false} }
+        }
+      }
+    });
+  }
+}
+
+// ──────────────────────────────────────────────
+// Scatter / Portfolio chart
+// ──────────────────────────────────────────────
+function renderScatterChart() {
+  const ap = getActivePeriods();
+  const agg = {};
+  for (const p of ap) {
+    for (const r of getRows(p)) {
+      const k = r.recommender_name;
+      if (!agg[k]) agg[k] = { clicks:0, views:0, atc:0, purchased:0, revenue:0, orders:0, n:0 };
+      agg[k].clicks    += r.clicks_count               || 0;
+      agg[k].views     += r.recommender_views_count     || 0;
+      agg[k].atc       += r.add_to_cart_count           || 0;
+      agg[k].purchased += r.product_purchased_count     || 0;
+      agg[k].revenue   += r.std_attributed_revenue      || 0;
+      agg[k].orders    += r.order_count                 || 0;
+      agg[k].n++;
+    }
+  }
+
+  // Limit to recs with meaningful data (≥200 views avg)
+  const entries = Object.entries(agg).filter(([,v]) => v.n > 0 && v.views / v.n >= 200);
+  if (entries.length === 0) return;
+
+  // Weighted average across all recommenders (not simple average of monthly ratios)
+  const totalClicks    = entries.reduce((s,[,v]) => s + v.clicks, 0);
+  const totalViews     = entries.reduce((s,[,v]) => s + v.views, 0);
+  const totalPurchased = entries.reduce((s,[,v]) => s + v.purchased, 0);
+  const totalAtc       = entries.reduce((s,[,v]) => s + v.atc, 0);
+  const avgCtr  = totalViews > 0 ? (totalClicks    / totalViews) * 100 : 0;
+  const avgConv = totalAtc   > 0 ? (totalPurchased / totalAtc)   * 100 : 0;
+  const maxRev  = Math.max(...entries.map(([,v]) => v.revenue));
+
+  const datasets = entries.map(([name, v], i) => ({
+    label: name,
+    data: [{
+      x: v.views > 0 ? (v.clicks    / v.views) * 100 : 0,
+      y: v.atc   > 0 ? (v.purchased / v.atc)   * 100 : 0,
+      r: Math.max(6, Math.sqrt(v.revenue / maxRev) * 44),
+      revenue: v.revenue,
+      views: v.views,
+      orders: v.orders,
+    }],
+    backgroundColor: COLORS[i % COLORS.length] + '99',
+    borderColor: COLORS[i % COLORS.length],
+    borderWidth: 2,
+  }));
+
+  // Plugin: quadrant lines + data labels
+  const quadPlugin = {
+    id: 'quad',
+    afterDraw(chart) {
+      const { ctx: c, chartArea: ca, scales } = chart;
+      c.save();
+      const xPx = scales.x.getPixelForValue(avgCtr);
+      const yPx = scales.y.getPixelForValue(avgConv);
+
+      // Lines
+      c.strokeStyle = '#ccc'; c.lineWidth = 1; c.setLineDash([5,5]);
+      c.beginPath(); c.moveTo(xPx, ca.top);    c.lineTo(xPx, ca.bottom); c.stroke();
+      c.beginPath(); c.moveTo(ca.left, yPx);   c.lineTo(ca.right, yPx);  c.stroke();
+
+      // Avg labels on axes
+      c.setLineDash([]); c.font = '10px sans-serif'; c.fillStyle = '#aaa';
+      c.textAlign = 'left'; c.textBaseline = 'bottom';
+      c.fillText(`avg CTR ${avgCtr.toFixed(1)}%`, xPx + 3, ca.top + 12);
+      c.textAlign = 'right'; c.textBaseline = 'top';
+      c.fillText(`avg CV ${avgConv.toFixed(1)}%`, ca.right - 4, yPx + 3);
+
+      // Data labels (skip hidden datasets)
+      chart.data.datasets.forEach((ds, i) => {
+        if (ds.hidden) return;
+        const d = ds.data[0];
+        const px = scales.x.getPixelForValue(d.x);
+        const py = scales.y.getPixelForValue(d.y);
+        c.fillStyle = COLORS[i % COLORS.length];
+        c.font = 'bold 9px sans-serif';
+        c.textAlign = 'center'; c.textBaseline = 'bottom';
+        c.fillText(labelFor(ds.label), px, py - d.r - 3);
+      });
+      c.restore();
+    }
+  };
+
+  destroyChart('scatterChart');
+  CHARTS.scatterChart = new Chart(document.getElementById('scatterChart').getContext('2d'), {
+    type: 'bubble',
+    data: { datasets },
+    plugins: [quadPlugin],
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          title: items => items[0]?.dataset.label || '',
+          label: item => {
+            const d = item.raw;
+            return [
+              `CTR (clicks/views): ${d.x.toFixed(2)}%`,
+              `CV率 (purchased/atc): ${d.y.toFixed(2)}%`,
+              `売上: ¥${fmtNum(d.revenue)}`,
+              `Views: ${fmtNum(d.views)}`,
+              `Orders: ${d.orders.toLocaleString()}`,
+            ];
+          }
+        }}
+      },
+      scales: {
+        x: { title:{display:true, text:'CTR (%)', font:{size:12}}, ticks:{callback:v=>v.toFixed(1)+'%'}, grid:{color:'#f5f5f5'} },
+        y: { title:{display:true, text:'CV率 (%)', font:{size:12}}, ticks:{callback:v=>v.toFixed(1)+'%'}, grid:{color:'#f5f5f5'} }
+      }
+    }
+  });
+
+  // Legend for scatter
+  scatterRecs = entries.map(([name]) => name);
+  visibleScatter = new Set(scatterRecs);
+  buildLegendScatter('scatterLegend', entries.map(([name],i) => ({name, color: COLORS[i%COLORS.length]})));
+}
+
+// ──────────────────────────────────────────────
+// Insights
+// ──────────────────────────────────────────────
+function renderInsights() {
+  const agg = aggregateAll();
+  const ap  = getActivePeriods();
+  if (ap.length === 0) return;
+
+  // Compute per-rec stats
+  const recStats = Object.entries(agg).filter(([,v]) => v.totalViews > 0).map(([name, v]) => ({
+    name,
+    rpv:  v.totalRevenue / Math.max(v.totalViews, 1),
+    ctr:  v.totalClicks  / Math.max(v.totalViews, 1),
+    conv: v.totalOrders  / Math.max(v.totalClicks, 1),
+    aov:  v.totalOrders  > 0 ? v.totalRevenue / v.totalOrders : 0,
+    ...v
+  }));
+
+  // Sort helpers
+  const byRpv  = [...recStats].sort((a,b) => b.rpv  - a.rpv);
+  const byConv = [...recStats].filter(r => r.totalClicks > 100).sort((a,b) => b.conv - a.conv);
+  const byViews = [...recStats].sort((a,b) => b.totalViews - a.totalViews);
+
+  // Revenue concentration
+  const totalRev = recStats.reduce((s,r) => s + r.totalRevenue, 0);
+  const top3Rev  = byRpv.slice(0, 3);
+  const top3Share = totalRev > 0 ? top3Rev.reduce((s,r) => s + r.totalRevenue, 0) / totalRev : 0;
+
+  // Opportunity sizing: low CTR × high CV (potential = if CTR matched avg, extra revenue)
+  const avgCtr  = recStats.reduce((s,r) => s + r.ctr, 0)  / recStats.length;
+  const avgConv = recStats.reduce((s,r) => s + r.conv, 0) / recStats.length;
+  const opportunities = recStats
+    .filter(r => r.ctr < avgCtr && r.conv > avgConv && r.totalViews > 1000)
+    .map(r => {
+      const extraClicks  = (avgCtr - r.ctr) * r.totalViews;
+      const extraOrders  = extraClicks * r.conv;
+      const extraRevenue = extraOrders * r.aov;
+      return { ...r, extraRevenue };
+    })
+    .sort((a,b) => b.extraRevenue - a.extraRevenue);
+
+  // MoM trend for #1 revenue recommender
+  const topRec = byRpv[0]?.name;
+  let momTrend = null, momPeriods = null;
+  if (topRec && ap.length >= 2) {
+    const last = getVal(ap[ap.length-1], topRec, 'std_attributed_revenue');
+    const prev = getVal(ap[ap.length-2], topRec, 'std_attributed_revenue');
+    if (last != null && prev != null && prev > 0) {
+      momTrend = (last - prev) / prev;
+      momPeriods = [ap[ap.length-2], ap[ap.length-1]];
+    }
+  }
+
+  const grid = document.getElementById('insightGrid');
+  grid.innerHTML = `
+    <div class="insight-card good">
+      <h4>売上効率 Top 3（View当たり売上）</h4>
+      <div class="insight-body">Viewsが多くても稼ぐ力が高いとは限りません。配置の質を評価する最重要指標です。</div>
+      <table>${byRpv.slice(0,3).map(r => `<tr>
+        <td>${shortName(r.name)}</td>
+        <td>¥${r.rpv.toFixed(1)}/view</td>
+      </tr>`).join('')}</table>
+    </div>
+
+    <div class="insight-card warn">
+      <h4>低効率レコメンダー（Views多 / 売上効率低）</h4>
+      <div class="insight-body">露出が多いのに売上貢献が低い配置。アルゴリズム改善か配置見直しで改善余地があります。</div>
+      <table>${byViews.slice(0,5).sort((a,b) => a.rpv - b.rpv).slice(0,3).map(r => `<tr>
+        <td>${shortName(r.name)}</td>
+        <td>¥${r.rpv.toFixed(1)}/view</td>
+      </tr>`).join('')}</table>
+    </div>
+
+    <div class="insight-card action">
+      <h4>💡 機会試算：CTR改善 → 売上ポテンシャル</h4>
+      <div class="insight-body">「CV率は高いのにCTRが低い」レコメンダーの CTR を平均まで引き上げた場合の追加売上試算。</div>
+      ${opportunities.length > 0
+        ? `<table>${opportunities.slice(0,3).map(r => `<tr>
+          <td>${shortName(r.name)}<br>
+            <span style="font-size:10px;color:#888">CTR ${(r.ctr*100).toFixed(1)}% → avg ${(avgCtr*100).toFixed(1)}%</span>
+          </td>
+          <td>+¥${fmtNum(r.extraRevenue)}<span class="action-tag">要対応</span></td>
+        </tr>`).join('')}</table>`
+        : '<div style="font-size:12px;color:#888;margin-top:8px">対象レコメンダーなし（CTR低×CV高の組み合わせが存在しません）</div>'
+      }
+    </div>
+
+    <div class="insight-card info">
+      <h4>購買転換率 Top 3（クリック→購入）</h4>
+      <div class="insight-body">クリック後に実際に購入された割合。高い配置はアルゴリズムが「買いやすい商品」を提案できています。</div>
+      <table>${byConv.slice(0,3).map(r => `<tr>
+        <td>${shortName(r.name)}</td>
+        <td>${(r.conv*100).toFixed(1)}%
+          <span style="font-size:10px;color:#888;font-weight:400"><br>${r.totalOrders.toLocaleString()}件 / ${r.totalClicks.toLocaleString()}click</span>
+        </td>
+      </tr>`).join('')}</table>
+    </div>
+
+    <div class="insight-card ${top3Share > 0.8 ? 'warn' : 'good'}">
+      <h4>売上集中度（上位3件）</h4>
+      <div class="insight-value">${(top3Share*100).toFixed(0)}%</div>
+      <div class="insight-body">上位3レコメンダーが全体売上の <strong>${(top3Share*100).toFixed(0)}%</strong> を占めています。
+        ${top3Share > 0.8
+          ? '<span class="action-tag warn-tag">集中リスク</span> 特定配置障害時の売上影響が大きい状態です。'
+          : 'バランスよく分散しています。'}
+      </div>
+      <table>${top3Rev.map(r => `<tr><td>${shortName(r.name)}</td><td>¥${fmtNum(r.totalRevenue)}</td></tr>`).join('')}</table>
+    </div>
+
+    <div class="insight-card ${momTrend == null ? '' : momTrend >= 0 ? 'good' : 'warn'}">
+      <h4>前月比トレンド（売上1位レコメンダー）</h4>
+      ${momTrend != null
+        ? `<div class="insight-value ${momTrend >= 0 ? 'badge-up' : 'badge-down'}">${momTrend >= 0 ? '▲' : '▼'} ${(Math.abs(momTrend)*100).toFixed(1)}%</div>
+           <div class="insight-body">
+             <strong>${shortName(topRec)}</strong><br>
+             ${momPeriods[0]} → ${momPeriods[1]} の売上変化
+           </div>`
+        : '<div class="insight-body">期間が1ヶ月のみのため比較できません</div>'
+      }
+    </div>
+  `;
+}
+
+// ──────────────────────────────────────────────
+// Anomaly detection
+// ──────────────────────────────────────────────
+function renderAnomalyTable() {
+  const metric = document.getElementById('metricSelect').value;
+  const isPct  = ['ctr','atc_rate','conversion_rate'].includes(metric);
+  const ap     = getActivePeriods();
+  const anomalies = [];
+
+  for (const rec of activeRecs) {
+    for (let i = 1; i < ap.length; i++) {
+      const pv = getVal(ap[i-1], rec, metric);
+      const cv = getVal(ap[i],   rec, metric);
+      if (pv == null || cv == null || pv === 0) continue;
+      const change = (cv - pv) / Math.abs(pv);
+      if (Math.abs(change) >= 0.30)
+        anomalies.push({ rec, from: ap[i-1], to: ap[i], pv, cv, change });
+    }
+  }
+  anomalies.sort((a,b) => Math.abs(b.change) - Math.abs(a.change));
+
+  document.getElementById('anomalyCount').textContent = anomalies.length;
+  document.getElementById('statAnomalies').textContent = anomalies.length;
+
+  const container = document.getElementById('anomalyTable');
+  if (!anomalies.length) {
+    container.innerHTML = '<div class="loading">異常候補なし（前月比 ±30% 未満）</div>'; return;
+  }
+  const fmtV = v => isPct ? (v*100).toFixed(2)+'%' : fmtNum(v);
+  let html = `<table class="data-table"><thead><tr>
+    <th>レコメンダー</th><th>期間</th><th>前月値</th><th>当月値</th><th>変化率</th><th>Views（当月）</th>
+  </tr></thead><tbody>`;
+  for (const a of anomalies) {
+    const dir = a.change > 0 ? '▲' : '▼';
+    const cls = Math.abs(a.change) >= 0.5 ? 'badge-down' : (a.change > 0 ? 'badge-up' : 'badge-down');
+    const views = (allData[a.to]||[]).find(r => r.recommender_name === a.rec)?.recommender_views_count?.toLocaleString() ?? '-';
+    html += `<tr>
+      <td><strong>${a.rec}</strong></td>
+      <td style="color:#888">${a.from} → ${a.to}</td>
+      <td>${fmtV(a.pv)}</td><td>${fmtV(a.cv)}</td>
+      <td class="${cls}">${dir} ${(Math.abs(a.change)*100).toFixed(1)}%</td>
+      <td>${views}</td>
+    </tr>`;
+  }
+  container.innerHTML = html + '</tbody></table>';
+}
+
+// ──────────────────────────────────────────────
+// Summary table
+// ──────────────────────────────────────────────
+let _summaryRows = [];
+
+function renderSummaryTable() {
+  const site = document.getElementById('siteFilter').value;
+  _summaryRows = activeRecs.map(rec => {
+    let views=0, clicks=0, atc=0, orders=0, revenue=0, ctrSum=0, convSum=0, atcSum=0, n=0, s='';
+    for (const p of getActivePeriods()) {
+      const row = (allData[p]||[]).find(r => r.recommender_name === rec && (!site || r.site === site));
+      if (!row) continue;
+      views   += row.recommender_views_count || 0;
+      clicks  += row.clicks_count            || 0;
+      atc     += row.add_to_cart_count       || 0;
+      orders  += row.order_count             || 0;
+      revenue += row.std_attributed_revenue  || 0;
+      ctrSum  += row.ctr                     || 0;
+      convSum += row.conversion_rate         || 0;
+      atcSum  += row.atc_rate                || 0;
+      n++; s = row.site;
+    }
+    return { name:rec, site:s, periods:n, views, clicks, atc, orders, revenue,
+             ctr: n ? ctrSum/n : 0, conv: n ? convSum/n : 0, atc_rate: n ? atcSum/n : 0,
+             rpv: views > 0 ? revenue/views : 0 };
+  });
+  applyAndRenderSummary();
+}
+
+function applyAndRenderSummary() {
+  const colMap = { name:'name', site:'site', periods:'periods', views:'views', clicks:'clicks',
+                   orders:'orders', revenue:'revenue', ctr:'ctr', conv:'conv', rpv:'rpv', atc:'atc_rate' };
+  const rows = [..._summaryRows].sort((a,b) => {
+    const col = colMap[summarySort.col] || 'revenue';
+    const av = a[col], bv = b[col];
+    if (typeof av === 'string') return summarySort.dir==='asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    return summarySort.dir==='asc' ? av-bv : bv-av;
+  });
+  document.getElementById('summaryBody').innerHTML = rows.map(r => `<tr>
+    <td><strong>${r.name}</strong></td>
+    <td style="color:#888;font-size:11px">${r.site}</td>
+    <td>${r.periods}</td>
+    <td>${fmtNum(r.views)}</td>
+    <td>${fmtNum(r.clicks)}</td>
+    <td>${r.orders.toLocaleString()}</td>
+    <td>¥${fmtNum(r.revenue)}</td>
+    <td>${(r.ctr*100).toFixed(2)}%</td>
+    <td>${(r.conv*100).toFixed(2)}%</td>
+    <td>¥${r.rpv.toFixed(2)}</td>
+    <td>${(r.atc_rate*100).toFixed(2)}%</td>
+  </tr>`).join('');
+}
+
+function sortSummary(col) {
+  summarySort.dir = summarySort.col === col ? (summarySort.dir==='asc'?'desc':'asc') : 'desc';
+  summarySort.col = col;
+  applyAndRenderSummary();
+}
+
+// ──────────────────────────────────────────────
+// RAW table
+// ──────────────────────────────────────────────
+const RAW_COLS = [
+  { key:'recommender_name',        label:'レコメンダー',  fmt: v => v },
+  { key:'site',                    label:'サイト',        fmt: v => v },
+  { key:'recommender_views_count', label:'Views',         fmt: fmtNum },
+  { key:'clicks_count',            label:'Clicks',        fmt: fmtNum },
+  { key:'ctr',                     label:'CTR',           fmt: v => (v*100).toFixed(3)+'%' },
+  { key:'add_to_cart_count',       label:'ATC',           fmt: fmtNum },
+  { key:'atc_rate',                label:'ATC Rate',      fmt: v => (v*100).toFixed(3)+'%' },
+  { key:'order_count',             label:'Orders',        fmt: v => v?.toLocaleString() ?? '-' },
+  { key:'conversion_rate',         label:'CV Rate',       fmt: v => (v*100).toFixed(3)+'%' },
+  { key:'std_attributed_revenue',  label:'売上(JPY)',     fmt: v => '¥'+fmtNum(v) },
+];
+
+function updateRawPeriodSelect() {
+  const sel = document.getElementById('rawPeriod');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— 選択してください —</option>';
+  for (const p of sortedPeriods) {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p + (disabledPeriods.has(p) ? ' (非表示)' : '');
+    if (p === cur) o.selected = true;
+    sel.appendChild(o);
+  }
+}
+
+function renderRawTable() {
+  const period   = document.getElementById('rawPeriod').value;
+  const wrap     = document.getElementById('rawTableWrap');
+  if (!period) { wrap.innerHTML = '<div class="loading">期間を選択してください</div>'; return; }
+
+  const site = document.getElementById('siteFilter').value;
+  let rows = (allData[period] || []).filter(r => !site || r.site === site);
+
+  const qf = document.getElementById('rawSearch').value.trim().toLowerCase();
+  if (qf) rows = rows.filter(r => r.recommender_name.toLowerCase().includes(qf));
+
+  const sortCol = document.getElementById('rawSort').value;
+  rows = [...rows].sort((a,b) => {
+    if (sortCol === 'recommender_name')
+      return rawSortDir==='asc' ? a.recommender_name.localeCompare(b.recommender_name) : b.recommender_name.localeCompare(a.recommender_name);
+    return rawSortDir==='asc' ? (a[sortCol]||0)-(b[sortCol]||0) : (b[sortCol]||0)-(a[sortCol]||0);
+  });
+
+  const pageSize = parseInt(document.getElementById('rawPageSize').value);
+  const total = rows.length;
+  let paged = rows, totalPages = 1;
+  if (pageSize > 0) {
+    totalPages = Math.ceil(total / pageSize);
+    rawPage = Math.min(rawPage, Math.max(0, totalPages-1));
+    paged = rows.slice(rawPage*pageSize, (rawPage+1)*pageSize);
+  }
+  const from = pageSize > 0 ? rawPage*pageSize+1 : 1;
+  const to   = pageSize > 0 ? Math.min((rawPage+1)*pageSize, total) : total;
+  document.getElementById('rawPageInfo').textContent = `${from}–${to} / ${total}件`;
+
+  let html = '<table class="data-table"><thead><tr>';
+  for (const c of RAW_COLS) html += `<th onclick="rawSortBy('${c.key}')">${c.label}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const r of paged) {
+    html += '<tr>';
+    for (const c of RAW_COLS) {
+      const v = r[c.key];
+      html += `<td>${v != null ? c.fmt(v) : '-'}</td>`;
+    }
+    html += '</tr>';
+  }
+  wrap.innerHTML = html + '</tbody></table>';
+}
+
+function rawSortBy(col) {
+  const cur = document.getElementById('rawSort').value;
+  rawSortDir = cur === col ? (rawSortDir==='desc'?'asc':'desc') : 'desc';
+  document.getElementById('rawSort').value = col;
+  rawPage = 0;
+  renderRawTable();
+}
+
+// ──────────────────────────────────────────────
+// Stats
+// ──────────────────────────────────────────────
+function updateStats() {
+  const ap = getActivePeriods();
+  const periodsText = ap.length === sortedPeriods.length
+    ? String(sortedPeriods.length)
+    : `${ap.length} / ${sortedPeriods.length}`;
+  document.getElementById('statPeriods').textContent = periodsText;
+
+  const allRecs = new Set();
+  for (const p of ap) for (const r of getRows(p)) allRecs.add(r.recommender_name);
+  document.getElementById('statRecs').textContent = allRecs.size;
+  document.getElementById('statShown').textContent = activeRecs.length;
+
+  const totalRev = Object.values(aggregateAll()).reduce((s,v) => s + v.totalRevenue, 0);
+  document.getElementById('statRevenue').textContent = '¥' + fmtNum(totalRev);
+}
+
+// ──────────────────────────────────────────────
+// Legend helpers
+// ──────────────────────────────────────────────
+function buildLegend(containerId, recs, chartId) {
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = '';
+  recs.forEach((rec, i) => {
+    const item = document.createElement('div');
+    item.className = 'legend-item' + (visibleRecs.has(rec) ? '' : ' dimmed');
+    item.innerHTML = `<div class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></div><span title="${rec}">${labelFor(rec)}</span>`;
+    item.addEventListener('click', () => {
+      if (visibleRecs.has(rec)) { visibleRecs.delete(rec); item.classList.add('dimmed'); }
+      else { visibleRecs.add(rec); item.classList.remove('dimmed'); }
+      const chart = CHARTS[chartId];
+      if (chart) {
+        const idx = recs.indexOf(rec);
+        if (idx >= 0) { chart.data.datasets[idx].hidden = !visibleRecs.has(rec); chart.update(); }
+      }
+    });
+    wrap.appendChild(item);
+  });
+}
+
+function buildLegendScatter(containerId, items) {
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = '';
+  items.forEach(({ name, color }, i) => {
+    const item = document.createElement('div');
+    item.id = 'sleg_' + i;
+    item.className = 'legend-item' + (visibleScatter.has(name) ? '' : ' dimmed');
+    item.innerHTML = `<div class="legend-dot" style="background:${color}"></div><span title="${name}">${labelFor(name)}</span>`;
+    item.addEventListener('click', () => {
+      if (visibleScatter.has(name)) { visibleScatter.delete(name); item.classList.add('dimmed'); }
+      else { visibleScatter.add(name); item.classList.remove('dimmed'); }
+      if (CHARTS.scatterChart) {
+        CHARTS.scatterChart.data.datasets[i].hidden = !visibleScatter.has(name);
+        CHARTS.scatterChart.update();
+      }
+    });
+    wrap.appendChild(item);
+  });
+}
+
+function setAllVisible(chartType, show) {
+  if (chartType === 'trend') {
+    if (show) activeRecs.forEach(r => visibleRecs.add(r));
+    else visibleRecs.clear();
+    if (CHARTS.trendChart) {
+      CHARTS.trendChart.data.datasets.forEach(ds => { ds.hidden = !show; });
+      CHARTS.trendChart.update();
+    }
+    document.querySelectorAll('#trendLegend .legend-item').forEach(el => {
+      el.classList.toggle('dimmed', !show);
+    });
+  } else if (chartType === 'scatter') {
+    if (show) scatterRecs.forEach(r => visibleScatter.add(r));
+    else visibleScatter.clear();
+    if (CHARTS.scatterChart) {
+      CHARTS.scatterChart.data.datasets.forEach(ds => { ds.hidden = !show; });
+      CHARTS.scatterChart.update();
+    }
+    document.querySelectorAll('#scatterLegend .legend-item').forEach(el => {
+      el.classList.toggle('dimmed', !show);
+    });
+  }
+}
+
+// ──────────────────────────────────────────────
+// Tab
+// ──────────────────────────────────────────────
+function switchTab(name) {
+  const tabs = ['trend','overview','scatter','insight','anomaly','table','raw'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id==='tab-'+name));
+  if (name === 'scatter' && scatterDirty && sortedPeriods.length > 0) {
+    renderScatterChart();
+    scatterDirty = false;
+  }
+  if (name === 'raw') renderRawTable();
+}
+
+function resetZoom() { if (CHARTS.trendChart) CHARTS.trendChart.resetZoom(); }
+
+// ──────────────────────────────────────────────
+// Misc helpers
+// ──────────────────────────────────────────────
+function destroyChart(id) { if (CHARTS[id]) { CHARTS[id].destroy(); delete CHARTS[id]; } }
+
+function fmtNum(v) {
+  if (v == null) return '-';
+  return v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : Number(v).toFixed(0);
+}
+
+function fmtMetric(v, metric) {
+  if (v == null) return '-';
+  if (metric === 'pct_raw') return v.toFixed(2) + '%';
+  if (['ctr','atc_rate','conversion_rate'].includes(metric)) return (v*100).toFixed(2)+'%';
+  if (metric === 'std_attributed_revenue') return '¥' + fmtNum(v);
+  return fmtNum(v);
+}
+
+function shortName(name) { return name.length > 34 ? name.slice(0,32)+'…' : name; }
+
+function labelFor(name) {
+  return name
+    .replace('products-in-all-categories-jp-', 'p-ac-jp-')
+    .replace('products-in-all-categories-jp', 'p-ac-jp')
+    .replace('products-in-all-categories-', 'p-ac-')
+    .replace('product-to-product-', 'p2p-')
+    .replace('products-in-', 'p-in-')
+    .slice(0, 22);
+}
+</script>
+</body>
+</html>

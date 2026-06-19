@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RD — Analytics Dashboard</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+.auth-container { text-align: center; max-width: 400px; width: 90%; }
+.auth-box { background: white; border-radius: 12px; padding: 40px 48px; box-shadow: 0 4px 24px rgba(0,0,0,0.12); margin-bottom: 24px; }
+.auth-box h1 { font-size: 20px; color: #333; margin-bottom: 6px; }
+.auth-box .sub { font-size: 12px; color: #999; margin-bottom: 24px; }
+.auth-box input { display: block; width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 12px; }
+.auth-box input:focus { outline: none; border-color: #cc0000; }
+.auth-box button { width: 100%; padding: 10px; background: #cc0000; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.auth-box button:hover { background: #aa0000; }
+.auth-error { color: #cc0000; font-size: 12px; margin-top: 8px; display: none; }
+
+.portal { display: none; }
+.portal h1 { font-size: 22px; margin-bottom: 8px; }
+.portal .sub { font-size: 13px; color: #888; margin-bottom: 24px; }
+.portal .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 600px) { .portal .cards { grid-template-columns: 1fr; } }
+.portal .card { background: white; border-radius: 10px; padding: 28px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); text-decoration: none; color: #333; transition: transform 0.15s, box-shadow 0.15s; }
+.portal .card:hover { transform: translateY(-3px); box-shadow: 0 6px 24px rgba(0,0,0,0.12); }
+.portal .card h2 { font-size: 15px; margin-bottom: 6px; }
+.portal .card p { font-size: 12px; color: #888; line-height: 1.5; }
+.portal .card .icon { font-size: 28px; margin-bottom: 12px; }
+.card-search { border-top: 3px solid #cc0000; }
+.card-einstein { border-top: 3px solid #1a1a2e; }
+.logout { margin-top: 20px; font-size: 12px; color: #aaa; cursor: pointer; }
+.logout:hover { color: #cc0000; }
+</style>
+</head>
+<body>
+
+<!-- 認証画面 -->
+<div class="auth-container" id="authView">
+  <div class="auth-box">
+    <h1>RD Analytics</h1>
+    <p class="sub">パスワードを入力してください</p>
+    <input type="password" id="pwInput" placeholder="Password" onkeydown="if(event.key==='Enter')checkPw()">
+    <button onclick="checkPw()">ログイン</button>
+    <p class="auth-error" id="pwError">パスワードが正しくありません</p>
+  </div>
+</div>
+
+<!-- ポータル画面 -->
+<div class="auth-container portal" id="portalView">
+  <h1>RD Analytics</h1>
+  <p class="sub">分析ダッシュボードを選択してください</p>
+  <div class="cards">
+    <a href="./search/" class="card card-search">
+      <div class="icon">&#128269;</div>
+      <h2>検索分析</h2>
+      <p>検索ワード別 CV推移・異常検知・ファネル分解・成長/衰退ランキング</p>
+    </a>
+    <a href="./einstein/" class="card card-einstein">
+      <div class="icon">&#129302;</div>
+      <h2>Einstein Recommender</h2>
+      <p>レコメンダー別 月次パフォーマンス分析・スロット比較</p>
+    </a>
+  </div>
+  <div class="logout" onclick="logout()">ログアウト</div>
+</div>
+
+<script>
+const PW_HASH = '032778fa5dae5c627d06fe72acdecfd97f95c0e1ac087e462c360a9d759712e9';
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function checkPw() {
+  const input = document.getElementById('pwInput').value;
+  const hash = await sha256(input);
+  if (hash === PW_HASH) {
+    sessionStorage.setItem('nb_dashboard_auth', '1');
+    showPortal();
+  } else {
+    document.getElementById('pwError').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+  }
+}
+
+function showPortal() {
+  document.getElementById('authView').style.display = 'none';
+  document.getElementById('portalView').style.display = 'block';
+}
+
+function logout() {
+  sessionStorage.removeItem('nb_dashboard_auth');
+  location.reload();
+}
+
+if (sessionStorage.getItem('nb_dashboard_auth') === '1') {
+  showPortal();
+}
+</script>
+</body>
+</html>
