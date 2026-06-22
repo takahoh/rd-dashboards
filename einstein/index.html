@@ -950,7 +950,7 @@ function renderAnomalyTable() {
   </tr></thead><tbody>`;
   for (const a of anomalies) {
     const dir = a.change > 0 ? '▲' : '▼';
-    const cls = Math.abs(a.change) >= 0.5 ? 'badge-down' : (a.change > 0 ? 'badge-up' : 'badge-down');
+    const cls = a.change > 0 ? 'badge-up' : 'badge-down';
     const views = (allData[a.to]||[]).find(r => r.recommender_name === a.rec)?.recommender_views_count?.toLocaleString() ?? '-';
     html += `<tr>
       <td><strong>${a.rec}</strong></td>
