@@ -769,14 +769,16 @@ function renderAnomalyTable(metric) {
 
   for (const a of anomalies) {
     const dir = a.change > 0 ? '▲' : '▼';
-    const cls = Math.abs(a.change) >= 0.5 ? 'anomaly' : '';
+    const absChange = Math.abs(a.change) * 100;
+    const changeColor = a.change > 0 ? '#20bf6b' : '#cc0000';
+    const changeFontWeight = absChange >= 50 ? '700' : '600';
     const searches = allData[a.to]?.[a.query]?.searches?.toLocaleString() ?? '-';
     html += `<tr>
       <td><strong>${a.query}</strong></td>
       <td>${a.from} → ${a.to}</td>
       <td>${fmt(a.prevVal)}</td>
       <td>${fmt(a.currVal)}</td>
-      <td class="${cls}">${dir} ${(Math.abs(a.change) * 100).toFixed(1)}%</td>
+      <td style="color:${changeColor};font-weight:${changeFontWeight};">${dir} ${absChange.toFixed(1)}%</td>
       <td>${searches}</td>
     </tr>`;
   }
