@@ -919,6 +919,9 @@ function renderInsights() {
 // ──────────────────────────────────────────────
 // Anomaly detection
 // ──────────────────────────────────────────────
+let einsteinAnomalySortCol = 'change';
+let einsteinAnomalySortDir = 'desc';
+
 function renderAnomalyTable() {
   const metric = document.getElementById('metricSelect').value;
   const isPct  = ['ctr','atc_rate','conversion_rate'].includes(metric);
@@ -935,7 +938,17 @@ function renderAnomalyTable() {
         anomalies.push({ rec, from: ap[i-1], to: ap[i], pv, cv, change });
     }
   }
-  anomalies.sort((a,b) => Math.abs(b.change) - Math.abs(a.change));
+
+  // ソート
+  anomalies.sort((a, b) => {
+    let va, vb;
+    if (einsteinAnomalySortCol === 'change') { va = Math.abs(a.change); vb = Math.abs(b.change); }
+    else if (einsteinAnomalySortCol === 'period') { va = a.to; vb = b.to; }
+    else if (einsteinAnomalySortCol === 'rec') { va = a.rec; vb = b.rec; }
+    else { va = Math.abs(a.change); vb = Math.abs(b.change); }
+    if (typeof va === 'string') return einsteinAnomalySortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return einsteinAnomalySortDir === 'asc' ? va - vb : vb - va;
+  });
 
   document.getElementById('anomalyCount').textContent = anomalies.length;
   document.getElementById('statAnomalies').textContent = anomalies.length;
@@ -944,9 +957,16 @@ function renderAnomalyTable() {
   if (!anomalies.length) {
     container.innerHTML = '<div class="loading">異常候補なし（前月比 ±30% 未満）</div>'; return;
   }
+
   const fmtV = v => isPct ? (v*100).toFixed(2)+'%' : fmtNum(v);
+  const si = (col) => einsteinAnomalySortCol === col ? (einsteinAnomalySortDir === 'asc' ? ' ▲' : ' ▼') : '';
+
   let html = `<table class="data-table"><thead><tr>
-    <th>レコメンダー</th><th>期間</th><th>前月値</th><th>当月値</th><th>変化率</th><th>Views（当月）</th>
+    <th onclick="einsteinAnomalySort('rec')" style="cursor:pointer">レコメンダー${si('rec')}</th>
+    <th onclick="einsteinAnomalySort('period')" style="cursor:pointer">期間${si('period')}</th>
+    <th>前月値</th><th>当月値</th>
+    <th onclick="einsteinAnomalySort('change')" style="cursor:pointer">変化率${si('change')}</th>
+    <th>Views（当月）</th>
   </tr></thead><tbody>`;
   for (const a of anomalies) {
     const dir = a.change > 0 ? '▲' : '▼';
@@ -961,6 +981,12 @@ function renderAnomalyTable() {
     </tr>`;
   }
   container.innerHTML = html + '</tbody></table>';
+}
+
+function einsteinAnomalySort(col) {
+  if (einsteinAnomalySortCol === col) { einsteinAnomalySortDir = einsteinAnomalySortDir === 'desc' ? 'asc' : 'desc'; }
+  else { einsteinAnomalySortCol = col; einsteinAnomalySortDir = 'desc'; }
+  renderAnomalyTable();
 }
 
 // ──────────────────────────────────────────────
