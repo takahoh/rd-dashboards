@@ -1436,7 +1436,8 @@ function resetZoom() {
 // 0件ヒット分析
 // ──────────────────────────────────────────────
 let noResultData = {}; // { "YYYY-MM": { query: { searches, search_visits, orders, ... } } }
-let noResultPeriods = [];
+let noResultPeriods = [];    // 読み込んだ全期間
+let activeNoResultPeriods = []; // 有効な期間（バッジON/OFFで制御）
 
 document.getElementById('noResultFileInput').addEventListener('change', async (e) => {
   const files = Array.from(e.target.files);
@@ -1461,19 +1462,37 @@ document.getElementById('noResultFileInput').addEventListener('change', async (e
         if (b.textContent === file.name) {
           b.className = 'file-badge loaded';
           b.textContent = `✓ ${period}`;
+          b.dataset.period = period;
+          b.title = 'クリックで表示/非表示を切り替え';
+          b.addEventListener('click', () => toggleNoResultBadge(b));
         }
       }
     } catch(err) { console.error(err); }
   }
   noResultPeriods = Object.keys(noResultData).sort();
+  activeNoResultPeriods = [...noResultPeriods];
   renderNoResult();
 });
+
+function toggleNoResultBadge(badge) {
+  const period = badge.dataset.period;
+  if (badge.classList.contains('off')) {
+    badge.classList.remove('off');
+    if (!activeNoResultPeriods.includes(period)) activeNoResultPeriods.push(period);
+  } else {
+    if (activeNoResultPeriods.length <= 1) return;
+    badge.classList.add('off');
+    activeNoResultPeriods = activeNoResultPeriods.filter(p => p !== period);
+  }
+  activeNoResultPeriods.sort();
+  renderNoResult();
+}
 
 function renderNoResult() {
   const container = document.getElementById('nrContent');
   const statsEl   = document.getElementById('nrStats');
 
-  if (noResultPeriods.length === 0) {
+  if (activeNoResultPeriods.length === 0) {
     container.innerHTML = '<div class="loading">検索結果0件CSVを読み込んでください</div>';
     statsEl.innerHTML = '';
     return;
@@ -1484,9 +1503,9 @@ function renderNoResult() {
   const topN         = parseInt(document.getElementById('nrTopN').value) || 0;
   const queryFilter  = document.getElementById('nrQuerySearch').value.trim().toLowerCase();
 
-  // 集計: クエリごとに月数・検索数合計・月平均
+  // 集計: クエリごとに月数・検索数合計・月平均（有効期間のみ）
   const agg = {};
-  for (const period of noResultPeriods) {
+  for (const period of activeNoResultPeriods) {
     for (const [q, row] of Object.entries(noResultData[period])) {
       if (!agg[q]) agg[q] = { months: 0, totalSearches: 0, totalVisits: 0, totalOrders: 0, periods: [] };
       agg[q].months++;
@@ -1500,7 +1519,7 @@ function renderNoResult() {
   // フィルタ
   let entries = Object.entries(agg);
   entries = entries.filter(([, v]) => {
-    const avgSearches = v.totalSearches / noResultPeriods.length;
+    const avgSearches = v.totalSearches / activeNoResultPeriods.length;
     return avgSearches >= minSearches && v.months >= minMonths;
   });
   if (queryFilter) {
@@ -1509,8 +1528,8 @@ function renderNoResult() {
 
   // ソート（月平均検索数 × 出現月数 でインパクト順）
   entries.sort((a, b) => {
-    const scoreA = a[1].totalSearches * (a[1].months / noResultPeriods.length);
-    const scoreB = b[1].totalSearches * (b[1].months / noResultPeriods.length);
+    const scoreA = a[1].totalSearches * (a[1].months / activeNoResultPeriods.length);
+    const scoreB = b[1].totalSearches * (b[1].months / activeNoResultPeriods.length);
     return scoreB - scoreA;
   });
 
@@ -1525,7 +1544,7 @@ function renderNoResult() {
   const totalSearchesLost   = Object.values(agg).reduce((s, v) => s + v.totalSearches, 0);
   statsEl.innerHTML = `
     <div class="stats-row" style="margin-bottom:0;">
-      <div class="stat-card"><div class="stat-label">読み込み期間</div><div class="stat-value">${noResultPeriods.length}</div><div class="stat-sub">${noResultPeriods[0]} 〜 ${noResultPeriods[noResultPeriods.length-1]}</div></div>
+      <div class="stat-card"><div class="stat-label">有効期間</div><div class="stat-value">${activeNoResultPeriods.length < noResultPeriods.length ? `${activeNoResultPeriods.length} / ${noResultPeriods.length}` : noResultPeriods.length}</div><div class="stat-sub">${activeNoResultPeriods[0]} 〜 ${activeNoResultPeriods[activeNoResultPeriods.length-1]}</div></div>
       <div class="stat-card"><div class="stat-label">0件ヒット ユニークワード</div><div class="stat-value">${totalUniqueNoResult.toLocaleString()}</div></div>
       <div class="stat-card"><div class="stat-label">損失検索数（全期間）</div><div class="stat-value">${totalSearchesLost.toLocaleString()}</div><div class="stat-sub">結果0件の検索回数合計</div></div>
       <div class="stat-card"><div class="stat-label">フィルタ後件数</div><div class="stat-value">${totalFiltered.toLocaleString()}</div></div>
@@ -1543,8 +1562,8 @@ function renderNoResult() {
   </tr></thead><tbody>`;
 
   for (const [q, v] of entries) {
-    const avgSearches = v.totalSearches / noResultPeriods.length;
-    const persistence = v.months / noResultPeriods.length;
+    const avgSearches = v.totalSearches / activeNoResultPeriods.length;
+    const persistence = v.months / activeNoResultPeriods.length;
 
     // 優先度
     let priority, priorityCls;
@@ -1573,7 +1592,7 @@ function renderNoResult() {
 
     html += `<tr>
       <td><strong>${q}</strong></td>
-      <td>${v.months} / ${noResultPeriods.length}</td>
+      <td>${v.months} / ${activeNoResultPeriods.length}</td>
       <td>${v.totalSearches.toLocaleString()}</td>
       <td>${avgSearches.toFixed(1)}</td>
       <td><span class="nr-badge ${priorityCls}">${priority}</span></td>
