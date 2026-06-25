@@ -145,7 +145,7 @@ th.sort-desc::after { content: ' ▼'; font-size: 9px; }
   <div class="control-group">
     <label>指標（推移グラフ）</label>
     <select id="metricSelect" onchange="renderAll()">
-      <option value="std_attributed_revenue">売上 (JPY)</option>
+      <option value="ste_attributed_revenue">売上 (JPY)</option>
       <option value="order_count">注文数</option>
       <option value="clicks_count">クリック数</option>
       <option value="recommender_views_count">表示回数</option>
@@ -348,7 +348,7 @@ th.sort-desc::after { content: ' ▼'; font-size: 9px; }
           <label>並び替え</label>
           <select id="rawSort" onchange="rawPage=0;renderRawTable()">
             <option value="recommender_views_count">Views</option>
-            <option value="std_attributed_revenue">売上JPY</option>
+            <option value="ste_attributed_revenue">売上JPY</option>
             <option value="order_count">注文数</option>
             <option value="conversion_rate">CV率</option>
             <option value="ctr">CTR</option>
@@ -527,7 +527,7 @@ function aggregateAll() {
       const k = r.recommender_name;
       if (!agg[k]) agg[k] = { totalViews:0, totalRevenue:0, totalOrders:0, totalClicks:0, totalAtc:0, periods:0 };
       agg[k].totalViews   += r.recommender_views_count || 0;
-      agg[k].totalRevenue += r.std_attributed_revenue  || 0;
+      agg[k].totalRevenue += r.ste_attributed_revenue  || 0;
       agg[k].totalOrders  += r.order_count             || 0;
       agg[k].totalClicks  += r.clicks_count            || 0;
       agg[k].totalAtc     += r.add_to_cart_count       || 0;
@@ -560,7 +560,7 @@ function getVal(period, recName, metric) {
     r.recommender_name === recName && (!site || r.site === site));
   if (!row) return null;
   if (metric === 'rpv') return row.recommender_views_count > 0
-    ? row.std_attributed_revenue / row.recommender_views_count : 0;
+    ? row.ste_attributed_revenue / row.recommender_views_count : 0;
   return row[metric] ?? null;
 }
 
@@ -592,7 +592,7 @@ function renderAll() {
 function renderTrendChart() {
   const metric = document.getElementById('metricSelect').value;
   const LABELS = {
-    std_attributed_revenue:'売上 (JPY)', order_count:'注文数',
+    ste_attributed_revenue:'売上 (JPY)', order_count:'注文数',
     clicks_count:'クリック数', recommender_views_count:'表示回数',
     add_to_cart_count:'カート追加数', ctr:'CTR',
     atc_rate:'ATC Rate', conversion_rate:'Conversion Rate'
@@ -687,7 +687,7 @@ function renderScatterChart() {
       agg[k].views     += r.recommender_views_count     || 0;
       agg[k].atc       += r.add_to_cart_count           || 0;
       agg[k].purchased += r.product_purchased_count     || 0;
-      agg[k].revenue   += r.std_attributed_revenue      || 0;
+      agg[k].revenue   += r.ste_attributed_revenue      || 0;
       agg[k].orders    += r.order_count                 || 0;
       agg[k].n++;
     }
@@ -838,8 +838,8 @@ function renderInsights() {
   const topRec = byRpv[0]?.name;
   let momTrend = null, momPeriods = null;
   if (topRec && ap.length >= 2) {
-    const last = getVal(ap[ap.length-1], topRec, 'std_attributed_revenue');
-    const prev = getVal(ap[ap.length-2], topRec, 'std_attributed_revenue');
+    const last = getVal(ap[ap.length-1], topRec, 'ste_attributed_revenue');
+    const prev = getVal(ap[ap.length-2], topRec, 'ste_attributed_revenue');
     if (last != null && prev != null && prev > 0) {
       momTrend = (last - prev) / prev;
       momPeriods = [ap[ap.length-2], ap[ap.length-1]];
@@ -1005,7 +1005,7 @@ function renderSummaryTable() {
       clicks  += row.clicks_count            || 0;
       atc     += row.add_to_cart_count       || 0;
       orders  += row.order_count             || 0;
-      revenue += row.std_attributed_revenue  || 0;
+      revenue += row.ste_attributed_revenue  || 0;
       ctrSum  += row.ctr                     || 0;
       convSum += row.conversion_rate         || 0;
       atcSum  += row.atc_rate                || 0;
@@ -1061,7 +1061,7 @@ const RAW_COLS = [
   { key:'atc_rate',                label:'ATC Rate',      fmt: v => (v*100).toFixed(3)+'%' },
   { key:'order_count',             label:'Orders',        fmt: v => v?.toLocaleString() ?? '-' },
   { key:'conversion_rate',         label:'CV Rate',       fmt: v => (v*100).toFixed(3)+'%' },
-  { key:'std_attributed_revenue',  label:'売上(JPY)',     fmt: v => '¥'+fmtNum(v) },
+  { key:'ste_attributed_revenue',  label:'売上(JPY)',     fmt: v => '¥'+fmtNum(v) },
 ];
 
 function updateRawPeriodSelect() {
@@ -1244,7 +1244,7 @@ function fmtMetric(v, metric) {
   if (v == null) return '-';
   if (metric === 'pct_raw') return v.toFixed(2) + '%';
   if (['ctr','atc_rate','conversion_rate'].includes(metric)) return (v*100).toFixed(2)+'%';
-  if (metric === 'std_attributed_revenue') return '¥' + fmtNum(v);
+  if (metric === 'ste_attributed_revenue') return '¥' + fmtNum(v);
   return fmtNum(v);
 }
 
