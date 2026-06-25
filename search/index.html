@@ -345,10 +345,18 @@
             <button id="needsWorkViewSingle" class="btn-primary" style="font-size:12px;padding:4px 12px;" onclick="switchNeedsWorkView('single')">単月</button>
             <button id="needsWorkViewMulti" class="btn-secondary" style="font-size:12px;padding:4px 12px;" onclick="switchNeedsWorkView('multi')">複数月継続</button>
           </div>
-          <div id="needsWorkMultiControl" style="display:none;align-items:center;gap:8px;">
-            <label style="font-size:12px;color:#666;">最低出現月数</label>
-            <input type="number" id="needsWorkMinMonths" value="2" min="1" style="width:60px;font-size:12px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;" oninput="renderNeedsWork()">
-            <span style="font-size:11px;color:#aaa;">/ <span id="needsWorkTotalMonths">-</span> 期間中</span>
+          <div id="needsWorkMultiControl" style="display:none;flex-wrap:wrap;align-items:center;gap:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label style="font-size:12px;color:#666;">最低出現月数</label>
+              <input type="number" id="needsWorkMinMonths" value="2" min="1" style="width:60px;font-size:12px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;" oninput="renderNeedsWork()">
+              <span style="font-size:11px;color:#aaa;">/ <span id="needsWorkTotalMonths">-</span> 期間中</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <label style="font-size:12px;color:#666;">対象期間</label>
+              <div id="needsWorkPeriodChecks" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+              <button class="btn-secondary" style="font-size:11px;padding:2px 8px;" onclick="toggleAllNeedsWorkPeriods(true)">全選択</button>
+              <button class="btn-secondary" style="font-size:11px;padding:2px 8px;" onclick="toggleAllNeedsWorkPeriods(false)">全解除</button>
+            </div>
           </div>
         </div>
         <div id="needsWorkContent"><div class="loading">期間を選択してください</div></div>
@@ -1106,7 +1114,34 @@ function switchNeedsWorkView(view) {
   document.getElementById('needsWorkViewSingle').style.cssText = 'font-size:12px;padding:4px 12px;';
   document.getElementById('needsWorkViewMulti').style.cssText  = 'font-size:12px;padding:4px 12px;';
   document.getElementById('needsWorkMultiControl').style.display = view === 'multi' ? 'flex' : 'none';
+  if (view === 'multi') buildNeedsWorkPeriodChecks();
   renderNeedsWork();
+}
+
+function buildNeedsWorkPeriodChecks() {
+  const wrap = document.getElementById('needsWorkPeriodChecks');
+  // 既存チェックボックスの選択状態を保持
+  const existing = {};
+  wrap.querySelectorAll('input[type=checkbox]').forEach(cb => { existing[cb.value] = cb.checked; });
+  wrap.innerHTML = '';
+  for (const p of activePeriods) {
+    const checked = existing[p] !== undefined ? existing[p] : true;
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;background:#f5f5f5;padding:2px 8px;border-radius:10px;border:1px solid #ddd;';
+    label.innerHTML = `<input type="checkbox" value="${p}" ${checked ? 'checked' : ''} onchange="renderNeedsWork()" style="cursor:pointer;">${p}`;
+    wrap.appendChild(label);
+  }
+}
+
+function toggleAllNeedsWorkPeriods(checked) {
+  document.querySelectorAll('#needsWorkPeriodChecks input[type=checkbox]').forEach(cb => { cb.checked = checked; });
+  renderNeedsWork();
+}
+
+function getSelectedNeedsWorkPeriods() {
+  const checks = document.querySelectorAll('#needsWorkPeriodChecks input[type=checkbox]:checked');
+  if (checks.length === 0) return activePeriods; // 全解除時は全期間にフォールバック
+  return Array.from(checks).map(cb => cb.value).sort();
 }
 
 function getNeedsWorkForPeriod(period) {
@@ -1151,13 +1186,16 @@ function renderNeedsWork() {
     renderNeedsWorkTable(container, items, period);
 
   } else {
-    // 複数月: 全有効期間を横断し、N期間以上赤だったワードを抽出
+    // 複数月: 選択した期間を横断し、N期間以上赤だったワードを抽出
     const minMonths = parseInt(document.getElementById('needsWorkMinMonths').value) || 2;
-    document.getElementById('needsWorkTotalMonths').textContent = activePeriods.length;
+    // activePeriods に変化があればチェックボックスを再構築
+    buildNeedsWorkPeriodChecks();
+    const targetPeriods = getSelectedNeedsWorkPeriods();
+    document.getElementById('needsWorkTotalMonths').textContent = targetPeriods.length;
 
     // 各期間の赤ワードを集計
     const redCount = {}; // query → { count, totalSearches, periods[] }
-    for (const period of activePeriods) {
+    for (const period of targetPeriods) {
       const items = getNeedsWorkForPeriod(period);
       for (const item of items) {
         if (!redCount[item.query]) redCount[item.query] = { count: 0, totalSearches: 0, periods: [], latestItem: null };
@@ -1196,7 +1234,7 @@ function renderNeedsWork() {
       const periodsStr = v.periods.length <= 4
         ? v.periods.join(', ')
         : v.periods.slice(0, 3).join(', ') + ` +${v.periods.length - 3}`;
-      const continuousBadge = v.count === activePeriods.length
+      const continuousBadge = v.count === targetPeriods.length
         ? '<span style="background:#fff0f0;color:#cc0000;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600;margin-left:4px;">全期間</span>'
         : '';
       html += `<tr>
@@ -1271,8 +1309,9 @@ function downloadNeedsWorkSingle() {
 
 function downloadNeedsWorkMulti() {
   const minMonths = parseInt(document.getElementById('needsWorkMinMonths').value) || 2;
+  const targetPeriods = getSelectedNeedsWorkPeriods();
   const redCount = {};
-  for (const period of activePeriods) {
+  for (const period of targetPeriods) {
     const items = getNeedsWorkForPeriod(period);
     for (const item of items) {
       if (!redCount[item.query]) redCount[item.query] = { count: 0, totalSearches: 0, periods: [], latestItem: null };
@@ -1290,7 +1329,7 @@ function downloadNeedsWorkMulti() {
   const rows = entries.map(([q, v]) => [
     `"${q}"`,
     v.count,
-    activePeriods.length,
+    targetPeriods.length,
     `"${v.periods.join('|')}"`,
     v.totalSearches,
     (v.latestItem.clickRate * 100).toFixed(2),
