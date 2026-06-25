@@ -336,6 +336,23 @@
           <div id="funnelContent"><div class="loading" style="padding:60px 0;">バブルをクリックしてください</div></div>
         </div>
       </div>
+
+      <!-- 要改善リスト -->
+      <div style="margin-top:24px;">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
+          <h2 style="font-size:15px;font-weight:600;">要改善ワード一覧 <span style="color:#cc0000;">●</span></h2>
+          <div style="display:flex;gap:8px;">
+            <button id="needsWorkViewSingle" class="btn-primary" style="font-size:12px;padding:4px 12px;" onclick="switchNeedsWorkView('single')">単月</button>
+            <button id="needsWorkViewMulti" class="btn-secondary" style="font-size:12px;padding:4px 12px;" onclick="switchNeedsWorkView('multi')">複数月継続</button>
+          </div>
+          <div id="needsWorkMultiControl" style="display:none;align-items:center;gap:8px;">
+            <label style="font-size:12px;color:#666;">最低出現月数</label>
+            <input type="number" id="needsWorkMinMonths" value="2" min="1" style="width:60px;font-size:12px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;" oninput="renderNeedsWork()">
+            <span style="font-size:11px;color:#aaa;">/ <span id="needsWorkTotalMonths">-</span> 期間中</span>
+          </div>
+        </div>
+        <div id="needsWorkContent"><div class="loading">期間を選択してください</div></div>
+      </div>
     </div>
   </div>
 
@@ -1073,6 +1090,158 @@ function renderInsight() {
 
   document.getElementById('funnelContent').innerHTML = '<div class="loading" style="padding:60px 0;">バブルをクリックしてください</div>';
   document.getElementById('funnelSubtitle').textContent = `期間: ${period} / 表示件数: ${points.length}件 / 中央値クリック率: ${(medClickRate*100).toFixed(1)}% / 中央値ランディングCV: ${(medLandingCV*100).toFixed(2)}%`;
+
+  renderNeedsWork();
+}
+
+// ──────────────────────────────────────────────
+// 要改善ワード一覧
+// ──────────────────────────────────────────────
+let needsWorkView = 'single'; // 'single' | 'multi'
+
+function switchNeedsWorkView(view) {
+  needsWorkView = view;
+  document.getElementById('needsWorkViewSingle').className = view === 'single' ? 'btn-primary' : 'btn-secondary';
+  document.getElementById('needsWorkViewMulti').className  = view === 'multi'  ? 'btn-primary' : 'btn-secondary';
+  document.getElementById('needsWorkViewSingle').style.cssText = 'font-size:12px;padding:4px 12px;';
+  document.getElementById('needsWorkViewMulti').style.cssText  = 'font-size:12px;padding:4px 12px;';
+  document.getElementById('needsWorkMultiControl').style.display = view === 'multi' ? 'flex' : 'none';
+  renderNeedsWork();
+}
+
+function getNeedsWorkForPeriod(period) {
+  // その期間の中央値を計算して赤ゾーン（高クリック・低CV）を抽出
+  const minSearches = parseInt(document.getElementById('insightMinSearches').value) || 0;
+  const data = allData[period];
+  if (!data) return [];
+  const rows = Object.values(data).filter(r => (r.searches || 0) >= minSearches && (r.search_visits || 0) > 0);
+  if (rows.length === 0) return [];
+  const clickRates = rows.map(r => r.search_visits / r.searches);
+  const landingCVs = rows.map(r => r.orders / r.search_visits);
+  const medCR = median(clickRates);
+  const medCV = median(landingCVs);
+  return rows.filter((r, i) => clickRates[i] >= medCR && landingCVs[i] < medCV)
+    .map((r, i) => {
+      const idx = rows.indexOf(r);
+      return {
+        query: String(r.query),
+        searches: r.searches,
+        clickRate: clickRates[idx],
+        landingCV: landingCVs[idx],
+        orders: r.orders,
+        ste_revenue: r.ste_revenue,
+        medCR, medCV,
+      };
+    });
+}
+
+function renderNeedsWork() {
+  const container = document.getElementById('needsWorkContent');
+  if (activePeriods.length === 0) {
+    container.innerHTML = '<div class="loading">データを読み込んでください</div>';
+    return;
+  }
+
+  if (needsWorkView === 'single') {
+    // 単月: 選択中の期間
+    const period = document.getElementById('insightPeriodSelect').value;
+    if (!period) { container.innerHTML = '<div class="loading">対象期間を選択してください</div>'; return; }
+    const items = getNeedsWorkForPeriod(period);
+    items.sort((a, b) => b.searches - a.searches);
+    renderNeedsWorkTable(container, items, period);
+
+  } else {
+    // 複数月: 全有効期間を横断し、N期間以上赤だったワードを抽出
+    const minMonths = parseInt(document.getElementById('needsWorkMinMonths').value) || 2;
+    document.getElementById('needsWorkTotalMonths').textContent = activePeriods.length;
+
+    // 各期間の赤ワードを集計
+    const redCount = {}; // query → { count, totalSearches, periods[] }
+    for (const period of activePeriods) {
+      const items = getNeedsWorkForPeriod(period);
+      for (const item of items) {
+        if (!redCount[item.query]) redCount[item.query] = { count: 0, totalSearches: 0, periods: [], latestItem: null };
+        redCount[item.query].count++;
+        redCount[item.query].totalSearches += item.searches;
+        redCount[item.query].periods.push(period);
+        redCount[item.query].latestItem = item;
+      }
+    }
+
+    const entries = Object.entries(redCount)
+      .filter(([, v]) => v.count >= minMonths)
+      .sort((a, b) => b[1].count - a[1].count || b[1].totalSearches - a[1].totalSearches);
+
+    if (entries.length === 0) {
+      container.innerHTML = `<div class="loading">${minMonths}期間以上継続して要改善のワードはありません</div>`;
+      return;
+    }
+
+    let html = `
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">${entries.length}件のワードが${minMonths}期間以上継続して要改善ゾーンにあります</div>
+      <div class="query-table-wrap">
+      <table><thead><tr>
+        <th>クエリ</th>
+        <th>継続月数</th>
+        <th>対象期間</th>
+        <th>総検索数</th>
+        <th>最新クリック率</th>
+        <th>最新ランディングCV</th>
+      </tr></thead><tbody>`;
+
+    for (const [q, v] of entries) {
+      const periodsStr = v.periods.length <= 4
+        ? v.periods.join(', ')
+        : v.periods.slice(0, 3).join(', ') + ` +${v.periods.length - 3}`;
+      const continuousBadge = v.count === activePeriods.length
+        ? '<span style="background:#fff0f0;color:#cc0000;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600;margin-left:4px;">全期間</span>'
+        : '';
+      html += `<tr>
+        <td><strong>${q}</strong>${continuousBadge}</td>
+        <td style="color:#cc0000;font-weight:600;">${v.count} / ${activePeriods.length}</td>
+        <td style="font-size:11px;color:#aaa;">${periodsStr}</td>
+        <td>${v.totalSearches.toLocaleString()}</td>
+        <td>${(v.latestItem.clickRate * 100).toFixed(1)}%</td>
+        <td style="color:#cc0000;">${(v.latestItem.landingCV * 100).toFixed(2)}%</td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  }
+}
+
+function renderNeedsWorkTable(container, items, period) {
+  if (items.length === 0) {
+    container.innerHTML = '<div class="loading">この期間に要改善ワードはありません</div>';
+    return;
+  }
+  let html = `
+    <div style="font-size:12px;color:#888;margin-bottom:8px;">${items.length}件（期間: ${period}）</div>
+    <div class="query-table-wrap">
+    <table><thead><tr>
+      <th>クエリ</th>
+      <th>検索数</th>
+      <th>クリック率</th>
+      <th style="color:#aaa;font-size:10px;">中央値</th>
+      <th>ランディングCV</th>
+      <th style="color:#aaa;font-size:10px;">中央値</th>
+      <th>注文数</th>
+      <th>売上JPY</th>
+    </tr></thead><tbody>`;
+  for (const item of items) {
+    html += `<tr>
+      <td><strong>${item.query}</strong></td>
+      <td>${item.searches.toLocaleString()}</td>
+      <td>${(item.clickRate * 100).toFixed(1)}%</td>
+      <td style="color:#aaa;font-size:11px;">${(item.medCR * 100).toFixed(1)}%</td>
+      <td style="color:#cc0000;font-weight:600;">${(item.landingCV * 100).toFixed(2)}%</td>
+      <td style="color:#aaa;font-size:11px;">${(item.medCV * 100).toFixed(2)}%</td>
+      <td>${(item.orders || 0).toLocaleString()}</td>
+      <td>¥${(item.ste_revenue || 0).toLocaleString()}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
 }
 
 function addMedianLines(chart, medX, medY) {
