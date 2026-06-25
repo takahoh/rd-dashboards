@@ -1178,7 +1178,10 @@ function renderNeedsWork() {
     }
 
     let html = `
-      <div style="font-size:12px;color:#888;margin-bottom:8px;">${entries.length}件のワードが${minMonths}期間以上継続して要改善ゾーンにあります</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+        <span style="font-size:12px;color:#888;">${entries.length}件のワードが${minMonths}期間以上継続して要改善ゾーンにあります</span>
+        <button class="btn-secondary" style="font-size:11px;padding:3px 10px;" onclick="downloadNeedsWorkMulti()">CSVダウンロード</button>
+      </div>
       <div class="query-table-wrap">
       <table><thead><tr>
         <th>クエリ</th>
@@ -1216,7 +1219,10 @@ function renderNeedsWorkTable(container, items, period) {
     return;
   }
   let html = `
-    <div style="font-size:12px;color:#888;margin-bottom:8px;">${items.length}件（期間: ${period}）</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+      <span style="font-size:12px;color:#888;">${items.length}件（期間: ${period}）</span>
+      <button class="btn-secondary" style="font-size:11px;padding:3px 10px;" onclick="downloadNeedsWorkSingle()">CSVダウンロード</button>
+    </div>
     <div class="query-table-wrap">
     <table><thead><tr>
       <th>クエリ</th>
@@ -1237,11 +1243,70 @@ function renderNeedsWorkTable(container, items, period) {
       <td style="color:#cc0000;font-weight:600;">${(item.landingCV * 100).toFixed(2)}%</td>
       <td style="color:#aaa;font-size:11px;">${(item.medCV * 100).toFixed(2)}%</td>
       <td>${(item.orders || 0).toLocaleString()}</td>
-      <td>¥${(item.ste_revenue || 0).toLocaleString()}</td>
+      <td>${(item.ste_revenue || 0).toLocaleString()}</td>
     </tr>`;
   }
   html += '</tbody></table></div>';
   container.innerHTML = html;
+}
+
+function downloadNeedsWorkSingle() {
+  const period = document.getElementById('insightPeriodSelect').value;
+  if (!period) return;
+  const items = getNeedsWorkForPeriod(period);
+  items.sort((a, b) => b.searches - a.searches);
+  const headers = ['query', 'searches', 'click_rate', 'click_rate_median', 'landing_cv', 'landing_cv_median', 'orders', 'ste_revenue'];
+  const rows = items.map(item => [
+    `"${item.query}"`,
+    item.searches,
+    (item.clickRate * 100).toFixed(2),
+    (item.medCR * 100).toFixed(2),
+    (item.landingCV * 100).toFixed(3),
+    (item.medCV * 100).toFixed(3),
+    item.orders || 0,
+    item.ste_revenue || 0,
+  ]);
+  downloadCSV([headers, ...rows], `needs_improvement_${period}.csv`);
+}
+
+function downloadNeedsWorkMulti() {
+  const minMonths = parseInt(document.getElementById('needsWorkMinMonths').value) || 2;
+  const redCount = {};
+  for (const period of activePeriods) {
+    const items = getNeedsWorkForPeriod(period);
+    for (const item of items) {
+      if (!redCount[item.query]) redCount[item.query] = { count: 0, totalSearches: 0, periods: [], latestItem: null };
+      redCount[item.query].count++;
+      redCount[item.query].totalSearches += item.searches;
+      redCount[item.query].periods.push(period);
+      redCount[item.query].latestItem = item;
+    }
+  }
+  const entries = Object.entries(redCount)
+    .filter(([, v]) => v.count >= minMonths)
+    .sort((a, b) => b[1].count - a[1].count || b[1].totalSearches - a[1].totalSearches);
+
+  const headers = ['query', 'red_months', 'total_months', 'periods', 'total_searches', 'latest_click_rate', 'latest_landing_cv'];
+  const rows = entries.map(([q, v]) => [
+    `"${q}"`,
+    v.count,
+    activePeriods.length,
+    `"${v.periods.join('|')}"`,
+    v.totalSearches,
+    (v.latestItem.clickRate * 100).toFixed(2),
+    (v.latestItem.landingCV * 100).toFixed(3),
+  ]);
+  downloadCSV([headers, ...rows], `needs_improvement_multi_${minMonths}months.csv`);
+}
+
+function downloadCSV(rows, filename) {
+  const bom = '﻿';
+  const content = bom + rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
 }
 
 function addMedianLines(chart, medX, medY) {
