@@ -90,9 +90,9 @@ button { padding: 7px 16px; border-radius: 4px; border: none; cursor: pointer; f
 .insight-card .insight-value { font-size: 22px; font-weight: 800; color: #1a1a2e; }
 .insight-card .insight-body { font-size: 12px; color: #555; margin-top: 6px; line-height: 1.6; }
 .insight-card table { width: 100%; font-size: 12px; margin-top: 8px; border-collapse: collapse; }
-.insight-card td { padding: 4px; vertical-align: top; border-bottom: 1px solid #f0f0f0; }
+.insight-card td { padding: 4px; vertical-align: top; border-bottom: 1px solid #f0f0f0; word-break: break-all; }
 .insight-card tr:last-child td { border-bottom: none; }
-.insight-card td:last-child { text-align: right; font-weight: 700; white-space: nowrap; color: #1a1a2e; }
+.insight-card td:last-child { text-align: right; font-weight: 700; white-space: nowrap; color: #1a1a2e; word-break: normal; min-width: 80px; }
 .insight-card .action-tag { display: inline-block; background: #e8f5e9; color: #2e7d32; border-radius: 4px; font-size: 10px; padding: 1px 6px; font-weight: 700; margin-left: 4px; }
 .insight-card .warn-tag { background: #fff3e0; color: #e65100; }
 
@@ -834,15 +834,21 @@ function renderInsights() {
     })
     .sort((a,b) => b.extraRevenue - a.extraRevenue);
 
-  // MoM trend for #1 revenue recommender
-  const topRec = byRpv[0]?.name;
-  let momTrend = null, momPeriods = null;
-  if (topRec && ap.length >= 2) {
-    const last = getVal(ap[ap.length-1], topRec, 'ste_attributed_revenue');
-    const prev = getVal(ap[ap.length-2], topRec, 'ste_attributed_revenue');
-    if (last != null && prev != null && prev > 0) {
-      momTrend = (last - prev) / prev;
-      momPeriods = [ap[ap.length-2], ap[ap.length-1]];
+  // MoM trend: find the highest-revenue rec that has data in the last 2 active periods
+  let momTrend = null, momPeriods = null, topRecForMom = null;
+  if (ap.length >= 2) {
+    const lastP = ap[ap.length-1];
+    const prevP = ap[ap.length-2];
+    // Try each rec in revenue order until we find one with data in both periods
+    for (const r of [...recStats].sort((a,b) => b.totalRevenue - a.totalRevenue)) {
+      const last = getVal(lastP, r.name, 'ste_attributed_revenue');
+      const prev = getVal(prevP, r.name, 'ste_attributed_revenue');
+      if (last != null && prev != null && prev > 0) {
+        momTrend = (last - prev) / prev;
+        momPeriods = [prevP, lastP];
+        topRecForMom = r.name;
+        break;
+      }
     }
   }
 
@@ -852,7 +858,7 @@ function renderInsights() {
       <h4>売上効率 Top 3（View当たり売上）</h4>
       <div class="insight-body">Viewsが多くても稼ぐ力が高いとは限りません。配置の質を評価する最重要指標です。</div>
       <table>${byRpv.slice(0,3).map(r => `<tr>
-        <td>${shortName(r.name)}</td>
+        <td>${r.name}</td>
         <td>¥${r.rpv.toFixed(1)}/view</td>
       </tr>`).join('')}</table>
     </div>
@@ -861,7 +867,7 @@ function renderInsights() {
       <h4>低効率レコメンダー（Views多 / 売上効率低）</h4>
       <div class="insight-body">露出が多いのに売上貢献が低い配置。アルゴリズム改善か配置見直しで改善余地があります。</div>
       <table>${byViews.slice(0,5).sort((a,b) => a.rpv - b.rpv).slice(0,3).map(r => `<tr>
-        <td>${shortName(r.name)}</td>
+        <td>${r.name}</td>
         <td>¥${r.rpv.toFixed(1)}/view</td>
       </tr>`).join('')}</table>
     </div>
@@ -871,7 +877,7 @@ function renderInsights() {
       <div class="insight-body">「CV率は高いのにCTRが低い」レコメンダーの CTR を平均まで引き上げた場合の追加売上試算。</div>
       ${opportunities.length > 0
         ? `<table>${opportunities.slice(0,3).map(r => `<tr>
-          <td>${shortName(r.name)}<br>
+          <td>${r.name}<br>
             <span style="font-size:10px;color:#888">CTR ${(r.ctr*100).toFixed(1)}% → avg ${(avgCtr*100).toFixed(1)}%</span>
           </td>
           <td>+¥${fmtNum(r.extraRevenue)}<span class="action-tag">要対応</span></td>
@@ -884,7 +890,7 @@ function renderInsights() {
       <h4>購買転換率 Top 3（クリック→購入）</h4>
       <div class="insight-body">クリック後に実際に購入された割合。高い配置はアルゴリズムが「買いやすい商品」を提案できています。</div>
       <table>${byConv.slice(0,3).map(r => `<tr>
-        <td>${shortName(r.name)}</td>
+        <td>${r.name}</td>
         <td>${(r.conv*100).toFixed(1)}%
           <span style="font-size:10px;color:#888;font-weight:400"><br>${r.totalOrders.toLocaleString()}件 / ${r.totalClicks.toLocaleString()}click</span>
         </td>
@@ -899,7 +905,7 @@ function renderInsights() {
           ? '<span class="action-tag warn-tag">集中リスク</span> 特定配置障害時の売上影響が大きい状態です。'
           : 'バランスよく分散しています。'}
       </div>
-      <table>${top3Rev.map(r => `<tr><td>${shortName(r.name)}</td><td>¥${fmtNum(r.totalRevenue)}</td></tr>`).join('')}</table>
+      <table>${top3Rev.map(r => `<tr><td>${r.name}</td><td>¥${fmtNum(r.totalRevenue)}</td></tr>`).join('')}</table>
     </div>
 
     <div class="insight-card ${momTrend == null ? '' : momTrend >= 0 ? 'good' : 'warn'}">
@@ -907,10 +913,10 @@ function renderInsights() {
       ${momTrend != null
         ? `<div class="insight-value ${momTrend >= 0 ? 'badge-up' : 'badge-down'}">${momTrend >= 0 ? '▲' : '▼'} ${(Math.abs(momTrend)*100).toFixed(1)}%</div>
            <div class="insight-body">
-             <strong>${shortName(topRec)}</strong><br>
+             <strong>${topRecForMom}</strong><br>
              ${momPeriods[0]} → ${momPeriods[1]} の売上変化
            </div>`
-        : '<div class="insight-body">期間が1ヶ月のみのため比較できません</div>'
+        : '<div class="insight-body">有効期間が1ヶ月のみのため比較できません</div>'
       }
     </div>
   `;
