@@ -626,7 +626,7 @@ function renderTrendChart() {
         zoom: { zoom: { wheel:{enabled:true}, pinch:{enabled:true}, mode:'x' }, pan:{enabled:true,mode:'x'} }
       },
       scales: {
-        y: { ticks: { callback: v => isPct ? v.toFixed(1)+'%' : fmtNum(v) }, grid:{color:'#f0f0f0'} },
+        y: { ticks: { callback: v => isPct ? v.toFixed(1)+'%' : fmtAxis(v) }, grid:{color:'#f0f0f0'} },
         x: { grid:{display:false} }
       }
     }
@@ -665,7 +665,7 @@ function renderOverviewCharts() {
           tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${pct ? c.raw.toFixed(2)+'%' : '¥'+fmtNum(c.raw)}` } }
         },
         scales: {
-          y: { ticks: { callback: v => pct ? v.toFixed(1)+'%' : '¥'+fmtNum(v) }, grid:{color:'#f0f0f0'} },
+          y: { ticks: { callback: v => pct ? v.toFixed(1)+'%' : '¥'+fmtAxis(v) }, grid:{color:'#f0f0f0'} },
           x: { grid:{display:false} }
         }
       }
@@ -1238,6 +1238,15 @@ function destroyChart(id) { if (CHARTS[id]) { CHARTS[id].destroy(); delete CHART
 function fmtNum(v) {
   if (v == null) return '-';
   return v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : Number(v).toFixed(0);
+}
+
+// Y軸 tick 専用: 同じ桁に複数の tick が並ぶ場合でも区別できるよう小数1桁を使う
+function fmtAxis(v) {
+  if (v == null) return '';
+  if (v >= 1e6)  return (v/1e6).toFixed(1) + 'M';
+  if (v >= 1e4)  return (v/1000).toFixed(0) + 'K';   // 10K以上は整数K
+  if (v >= 1000) return (v/1000).toFixed(1) + 'K';   // 1K〜9.9Kは小数1桁 (1.2K, 2.3K...)
+  return Number(v).toFixed(0);
 }
 
 function fmtMetric(v, metric) {
