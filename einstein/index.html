@@ -113,7 +113,10 @@ button { padding: 7px 16px; border-radius: 4px; border: none; cursor: pointer; f
 .improvement-card td { padding: 4px 3px; border-bottom: 1px solid rgba(0,0,0,.06); vertical-align: top; }
 .improvement-card tr:last-child td { border-bottom: none; }
 .improvement-card td:nth-child(2), .improvement-card td:nth-child(3) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.improvement-card .rec-name { word-break: break-all; color: #333; }
+.improvement-card .rec-name { word-break: break-all; color: #333; cursor: pointer; }
+.improvement-card .rec-name:hover { color: #1a1a2e; text-decoration: underline; }
+.improvement-card tr.highlighted td { background: #fffbe6; }
+.improvement-card tr.highlighted .rec-name { font-weight: 700; color: #1a1a2e; }
 .improvement-card .metric-val { font-weight: 700; }
 .empty-list { color: #aaa; font-style: italic; padding: 8px 0; font-size: 12px; }
 
@@ -877,8 +880,8 @@ function renderImprovementList(recPoints, threshCtr, threshConv) {
   const rowsHtml = (list, cols) => {
     if (!list.length) return `<div class="empty-list">対象なし</div>`;
     return `<table><thead><tr>${cols.map(c=>`<th style="font-size:10px;font-weight:700;color:#888;padding:3px;border-bottom:2px solid #eee">${c}</th>`).join('')}</tr></thead><tbody>
-      ${list.map(p => `<tr>
-        <td class="rec-name">${p.name}</td>
+      ${list.map(p => `<tr data-rec="${p.name.replace(/"/g,'&quot;')}">
+        <td class="rec-name" onclick="highlightBubble('${p.name.replace(/'/g,"\\'")}')">${p.name}</td>
         <td class="metric-val">${p.ctr.toFixed(2)}%</td>
         <td class="metric-val">${p.conv.toFixed(2)}%</td>
         <td class="metric-val">¥${fmtNum(p.revenue)}</td>
@@ -906,6 +909,48 @@ function renderImprovementList(recPoints, threshCtr, threshConv) {
       </div>
     </div>
   `;
+}
+
+// ──────────────────────────────────────────────
+// Scatter bubble highlight
+// ──────────────────────────────────────────────
+let _highlightedRec = null;
+
+function highlightBubble(name) {
+  const chart = CHARTS.scatterChart;
+  if (!chart) return;
+
+  // Toggle off if same rec clicked again
+  const isToggleOff = _highlightedRec === name;
+  _highlightedRec = isToggleOff ? null : name;
+
+  chart.data.datasets.forEach((ds, i) => {
+    const isTarget = ds.label === _highlightedRec;
+    const origColor = COLORS[i % COLORS.length];
+    if (_highlightedRec === null) {
+      // Reset all
+      ds.backgroundColor = origColor + '99';
+      ds.borderColor     = origColor;
+      ds.borderWidth     = 2;
+    } else if (isTarget) {
+      // Highlight: vivid fill, thick white-outlined border
+      ds.backgroundColor = origColor + 'ee';
+      ds.borderColor     = '#fff';
+      ds.borderWidth     = 4;
+      // halo effect via extra dataset not needed — outline handles it
+    } else {
+      // Dim others
+      ds.backgroundColor = origColor + '22';
+      ds.borderColor     = origColor + '44';
+      ds.borderWidth     = 1;
+    }
+  });
+  chart.update('none');  // no animation for snappy feel
+
+  // Sync row highlight in all improvement tables
+  document.querySelectorAll('#improvementSection tr[data-rec]').forEach(tr => {
+    tr.classList.toggle('highlighted', tr.dataset.rec === _highlightedRec);
+  });
 }
 
 // ──────────────────────────────────────────────
